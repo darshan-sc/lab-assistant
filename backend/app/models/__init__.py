@@ -3,3 +3,4 @@ from .user import User
 from .paper import Paper
 from .experiment import Experiment
 from .note import Note
+from .chunk import Chunk, ChunkSource
