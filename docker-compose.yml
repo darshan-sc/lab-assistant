@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: ai-lab-db
+    environment:
+      POSTGRES_DB: ai_lab
+      POSTGRES_USER: ai_lab_user
+      POSTGRES_PASSWORD: ai_lab_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_lab_user -d ai_lab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
