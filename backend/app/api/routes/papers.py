@@ -9,6 +9,7 @@ from app.schemas.paper import PaperUpdate, PaperOut
 from app.services.storage import save_upload_pdf
 from app.services.pdf_extractor import extract_text_from_pdf, get_first_n_chars
 from app.services.llm_extractor import extract_paper_metadata
+from app.services.rag import index_paper, answer_question
 from app.core.config import settings
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -123,3 +124,44 @@ def delete_paper(paper_id: int, db: Session = Depends(get_db)):
     db.delete(paper)
     db.commit()
     return {"deleted": True, "paper_id": paper_id}
+
+
+@router.post("/{paper_id}/index")
+def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db)):
+    """Index a paper's text into chunks with embeddings for RAG."""
+    user_id = get_current_user_id()
+
+    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
+    paper = db.execute(stmt).scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    if not paper.extracted_text:
+        raise HTTPException(status_code=400, detail="Paper has no extracted text to index")
+
+    try:
+        num_chunks = index_paper(db, paper)
+        return {"indexed": True, "paper_id": paper_id, "chunks_created": num_chunks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+
+
+@router.post("/{paper_id}/qa")
+def qa_paper_endpoint(
+    paper_id: int,
+    question: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    """Ask a question about a paper using RAG."""
+    user_id = get_current_user_id()
+
+    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
+    paper = db.execute(stmt).scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    try:
+        result = answer_question(db, user_id, paper_id, question)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"QA failed: {str(e)}")
