@@ -12,6 +12,17 @@ class PaperOut(BaseModel):
     title: str | None = None
     abstract: str | None = None
     pdf_path: str | None = None
+    processing_status: str | None = None
+    processing_error: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class PaperStatusOut(BaseModel):
+    id: int
+    processing_status: str
+    processing_error: str | None = None
 
     class Config:
         from_attributes = True

@@ -10,6 +10,14 @@ class Settings(BaseSettings):
     STORAGE_DIR: str
     MAX_UPLOAD_MB: int
 
+    # OpenAI
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
+    # Worker
+    WORKER_POLL_INTERVAL: int = 5
+    WORKER_MAX_RETRIES: int = 3
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
         env_file_encoding="utf-8",

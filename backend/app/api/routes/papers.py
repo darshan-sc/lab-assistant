@@ -4,8 +4,11 @@ from sqlalchemy import select
 
 from app.db import get_db
 from app.models import Paper
+from app.models.paper import ProcessingStatus
 from app.schemas.paper import PaperUpdate, PaperOut
 from app.services.storage import save_upload_pdf
+from app.services.pdf_extractor import extract_text_from_pdf, get_first_n_chars
+from app.services.llm_extractor import extract_paper_metadata
 from app.core.config import settings
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -32,12 +35,30 @@ async def upload_paper(
 
     path = save_upload_pdf(data, file.filename)
 
-    paper = Paper(
-        user_id=user_id,
-        pdf_path=path,
-        title=file.filename, # Use filename as temporary title
-        # abstract stays null until extraction
-    )
+    # Extract text from PDF (path is already the full path)
+    try:
+        full_text = extract_text_from_pdf(path)
+        truncated_text = get_first_n_chars(full_text, 8000)
+        metadata = extract_paper_metadata(truncated_text)
+
+        paper = Paper(
+            user_id=user_id,
+            pdf_path=path,
+            title=metadata.title,
+            abstract=metadata.abstract,
+            extracted_text=full_text,
+            processing_status=ProcessingStatus.COMPLETED.value,
+        )
+    except Exception as e:
+        # If extraction fails, save with filename as title
+        paper = Paper(
+            user_id=user_id,
+            pdf_path=path,
+            title=file.filename,
+            processing_status=ProcessingStatus.FAILED.value,
+            processing_error=str(e),
+        )
+
     db.add(paper)
     db.commit()
     db.refresh(paper)
@@ -70,6 +91,7 @@ def get_paper(paper_id: int, db: Session = Depends(get_db)):
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
     return paper
+
 
 @router.patch("/{paper_id}", response_model=PaperOut)
 def update_paper(paper_id: int, payload: PaperUpdate, db: Session = Depends(get_db)):
