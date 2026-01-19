@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.db import get_db
 from app.api.routes.papers import router as papers_router
+from app.api.routes.notes import router as notes_router
 
 app = FastAPI(title="Lab Assistant API")
 
 
 app.include_router(papers_router)
+app.include_router(notes_router)
 
 @app.get("/")
 def read_root():
