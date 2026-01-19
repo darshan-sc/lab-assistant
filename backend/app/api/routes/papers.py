@@ -10,6 +10,7 @@ from app.services.storage import save_upload_pdf
 from app.services.pdf_extractor import extract_text_from_pdf, get_first_n_chars
 from app.services.llm_extractor import extract_paper_metadata
 from app.services.rag import index_paper, answer_question
+from app.api.routes.projects import get_or_create_default_project
 from app.core.config import settings
 
 router = APIRouter(prefix="/papers", tags=["papers"])
@@ -21,9 +22,15 @@ def get_current_user_id() -> int:
 @router.post("/upload", response_model=PaperOut)
 async def upload_paper(
     file: UploadFile = File(...),
+    project_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     user_id = get_current_user_id()
+
+    # Default to "Default" project if not specified
+    if project_id is None:
+        default_project = get_or_create_default_project(db, user_id)
+        project_id = default_project.id
 
     if file.content_type not in {"application/pdf"}:
         raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
@@ -44,6 +51,7 @@ async def upload_paper(
 
         paper = Paper(
             user_id=user_id,
+            project_id=project_id,
             pdf_path=path,
             title=metadata.title,
             abstract=metadata.abstract,
@@ -54,6 +62,7 @@ async def upload_paper(
         # If extraction fails, save with filename as title
         paper = Paper(
             user_id=user_id,
+            project_id=project_id,
             pdf_path=path,
             title=file.filename,
             processing_status=ProcessingStatus.FAILED.value,
@@ -68,19 +77,19 @@ async def upload_paper(
 
 @router.get("", response_model=list[PaperOut])
 def list_papers(
+    project_id: int | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     user_id = get_current_user_id()
 
-    stmt = (
-        select(Paper)
-        .where(Paper.user_id == user_id)
-        .order_by(Paper.id.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    stmt = select(Paper).where(Paper.user_id == user_id)
+
+    if project_id is not None:
+        stmt = stmt.where(Paper.project_id == project_id)
+
+    stmt = stmt.order_by(Paper.id.desc()).limit(limit).offset(offset)
     return list(db.execute(stmt).scalars().all())
 
 @router.get("/{paper_id}", response_model=PaperOut)

@@ -4,7 +4,8 @@ from sqlalchemy import select
 
 from app.db import get_db
 from app.models import Note, Paper
-from app.schemas.note import NoteCreate, NoteUpdate, Note as NoteOut
+from app.schemas.note import NoteCreate, NoteUpdate, NoteOut
+from app.api.routes.projects import get_or_create_default_project
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -25,10 +26,18 @@ def create_note(payload: NoteCreate, db: Session = Depends(get_db)):
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
 
+    # Default to "Default" project if not specified
+    project_id = payload.project_id
+    if project_id is None:
+        default_project = get_or_create_default_project(db, user_id)
+        project_id = default_project.id
+
     note = Note(
         user_id=user_id,
+        project_id=project_id,
         paper_id=payload.paper_id,
         experiment_id=payload.experiment_id,
+        experiment_run_id=payload.experiment_run_id,
         content=payload.content,
     )
     db.add(note)
@@ -39,7 +48,10 @@ def create_note(payload: NoteCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[NoteOut])
 def list_notes(
+    project_id: int | None = Query(default=None),
     paper_id: int | None = Query(default=None),
+    experiment_id: int | None = Query(default=None),
+    experiment_run_id: int | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -48,8 +60,14 @@ def list_notes(
 
     stmt = select(Note).where(Note.user_id == user_id)
 
+    if project_id is not None:
+        stmt = stmt.where(Note.project_id == project_id)
     if paper_id is not None:
         stmt = stmt.where(Note.paper_id == paper_id)
+    if experiment_id is not None:
+        stmt = stmt.where(Note.experiment_id == experiment_id)
+    if experiment_run_id is not None:
+        stmt = stmt.where(Note.experiment_run_id == experiment_run_id)
 
     stmt = stmt.order_by(Note.created_at.desc()).limit(limit).offset(offset)
     return list(db.execute(stmt).scalars().all())

@@ -9,6 +9,7 @@ class PaperUpdate(BaseModel):
 class PaperOut(BaseModel):
     id: int
     user_id: int
+    project_id: int | None = None
     title: str | None = None
     abstract: str | None = None
     pdf_path: str | None = None

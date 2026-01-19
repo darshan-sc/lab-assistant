@@ -41,7 +41,9 @@ def index_paper(db: Session, paper: Paper) -> int:
     for i, (content, embedding) in enumerate(zip(chunks, embeddings)):
         chunk = Chunk(
             user_id=paper.user_id,
+            project_id=paper.project_id,
             source_type=ChunkSource.PAPER.value,
+            source_id=paper.id,
             paper_id=paper.id,
             content=content,
             chunk_index=i,
@@ -57,7 +59,9 @@ def retrieve_chunks(
     db: Session,
     user_id: int,
     query: str,
+    project_id: int | None = None,
     paper_id: int | None = None,
+    experiment_id: int | None = None,
     top_k: int = 5,
 ) -> list[Chunk]:
     """Retrieve the most relevant chunks for a query.
@@ -66,7 +70,9 @@ def retrieve_chunks(
         db: Database session
         user_id: User ID to filter chunks
         query: Query text to search for
+        project_id: Optional project ID to filter chunks
         paper_id: Optional paper ID to filter chunks
+        experiment_id: Optional experiment ID to filter chunks
         top_k: Number of chunks to retrieve
 
     Returns:
@@ -82,8 +88,12 @@ def retrieve_chunks(
         .limit(top_k)
     )
 
+    if project_id is not None:
+        stmt = stmt.where(Chunk.project_id == project_id)
     if paper_id is not None:
         stmt = stmt.where(Chunk.paper_id == paper_id)
+    if experiment_id is not None:
+        stmt = stmt.where(Chunk.experiment_id == experiment_id)
 
     return list(db.execute(stmt).scalars().all())
 
@@ -139,6 +149,82 @@ Rules:
 2. If the context doesn't contain enough information to answer, say so
 3. Cite your sources using [1], [2], etc. corresponding to the context chunks
 4. Be concise but thorough"""
+
+    response = client.chat.completions.create(
+        model=settings.OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+        ],
+    )
+
+    return {
+        "answer": response.choices[0].message.content,
+        "citations": citations,
+    }
+
+
+def answer_project_question(
+    db: Session,
+    user_id: int,
+    project_id: int,
+    question: str,
+    paper_id: int | None = None,
+    top_k: int = 5,
+) -> dict:
+    """Answer a question across a project using RAG.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        project_id: Project ID to query
+        question: User's question
+        paper_id: Optional paper ID to further filter
+        top_k: Number of chunks to retrieve
+
+    Returns:
+        Dict with answer and citations
+    """
+    chunks = retrieve_chunks(
+        db, user_id, question,
+        project_id=project_id,
+        paper_id=paper_id,
+        top_k=top_k
+    )
+
+    if not chunks:
+        return {
+            "answer": "No indexed content found for this project. Please index some papers or notes first.",
+            "citations": [],
+        }
+
+    # Build context from chunks with source info
+    context_parts = []
+    citations = []
+    for i, chunk in enumerate(chunks):
+        source_info = f"[{chunk.source_type}]"
+        context_parts.append(f"[{i + 1}] {source_info} {chunk.content}")
+        citations.append({
+            "chunk_id": chunk.id,
+            "source_type": chunk.source_type,
+            "source_id": chunk.source_id,
+            "paper_id": chunk.paper_id,
+            "chunk_index": chunk.chunk_index,
+            "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content,
+        })
+
+    context = "\n\n".join(context_parts)
+
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+    system_prompt = """You are a helpful research assistant. Answer the user's question based on the provided context from research papers and notes.
+
+Rules:
+1. Only use information from the provided context
+2. If the context doesn't contain enough information to answer, say so
+3. Cite your sources using [1], [2], etc. corresponding to the context chunks
+4. Be concise but thorough
+5. Note the source type (paper, note, etc.) when relevant"""
 
     response = client.chat.completions.create(
         model=settings.OPENAI_MODEL,

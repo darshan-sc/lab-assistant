@@ -16,6 +16,7 @@ class Paper(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
 
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     abstract: Mapped[str | None] = mapped_column(Text)
@@ -33,4 +34,5 @@ class Paper(Base):
     processing_completed_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     user = relationship("User", back_populates="papers")
+    project = relationship("Project", back_populates="papers")
     notes = relationship("Note", back_populates="paper", cascade="all, delete-orphan")

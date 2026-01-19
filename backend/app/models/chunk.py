@@ -9,6 +9,7 @@ class ChunkSource(str, enum.Enum):
     PAPER = "paper"
     NOTE = "note"
     EXPERIMENT = "experiment"
+    RUN = "run"
 
 
 class Chunk(Base):
@@ -16,12 +17,15 @@ class Chunk(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
 
     # Source tracking - which entity this chunk came from
-    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # paper, note, experiment
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # paper, note, experiment, run
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)  # ID of the source entity
     paper_id: Mapped[int | None] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"), index=True)
     note_id: Mapped[int | None] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), index=True)
     experiment_id: Mapped[int | None] = mapped_column(ForeignKey("experiments.id", ondelete="CASCADE"), index=True)
+    experiment_run_id: Mapped[int | None] = mapped_column(ForeignKey("experiment_runs.id", ondelete="CASCADE"), index=True)
 
     # Chunk content and position
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -34,6 +38,8 @@ class Chunk(Base):
 
     # Relationships
     user = relationship("User")
+    project = relationship("Project", back_populates="chunks")
     paper = relationship("Paper")
     note = relationship("Note")
     experiment = relationship("Experiment")
+    experiment_run = relationship("ExperimentRun")

@@ -1,20 +1,27 @@
-from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-class NoteBase(BaseModel):
+
+class NoteCreate(BaseModel):
     content: str
-    experiment_id: Optional[int] = None
-    paper_id: Optional[int] = None
+    project_id: int | None = None
+    paper_id: int | None = None
+    experiment_id: int | None = None
+    experiment_run_id: int | None = None
 
-class NoteCreate(NoteBase):
-    pass
 
-class NoteUpdate(NoteBase):
-    pass
+class NoteUpdate(BaseModel):
+    content: str | None = None
 
-class Note(NoteBase):
+
+class NoteOut(BaseModel):
     id: int
+    user_id: int
+    project_id: int | None = None
+    paper_id: int | None = None
+    experiment_id: int | None = None
+    experiment_run_id: int | None = None
+    content: str
     created_at: datetime
 
     class Config:
