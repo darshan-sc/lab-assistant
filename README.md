@@ -2,6 +2,8 @@
 
 Lab Assistant is an AI-powered research management tool designed to help scientists and researchers organize their projects, papers, notes, and experiments in one centralized platform. It leverages modern AI (OpenAI) and vector search capabilities to enhance productivity and knowledge retrieval.
 
+I built this because I often found my experiments and runs getting disorganized and hard to track. I think this could be a useful tool for anyone working in a research environment.
+
 ## Features
 
 - **Project Management**: Organize your research into distinct projects.
