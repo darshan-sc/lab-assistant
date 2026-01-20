@@ -2,22 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.db import get_db
+from app.deps import get_db, get_current_user
 from app.models import Note, Paper
+from app.models.user import User
 from app.schemas.note import NoteCreate, NoteUpdate, NoteOut
 from app.api.routes.projects import get_or_create_default_project
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
 
-# TEMP: until auth exists
-def get_current_user_id() -> int:
-    return 1
-
-
 @router.post("", response_model=NoteOut)
-def create_note(payload: NoteCreate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def create_note(payload: NoteCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     # Verify paper exists and belongs to user if paper_id provided
     if payload.paper_id:
@@ -55,8 +51,9 @@ def list_notes(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = select(Note).where(Note.user_id == user_id)
 
@@ -74,8 +71,8 @@ def list_notes(
 
 
 @router.patch("/{note_id}", response_model=NoteOut)
-def update_note(note_id: int, payload: NoteUpdate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def update_note(note_id: int, payload: NoteUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Note).where(Note.id == note_id, Note.user_id == user_id)
     note = db.execute(stmt).scalar_one_or_none()
@@ -91,8 +88,8 @@ def update_note(note_id: int, payload: NoteUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{note_id}")
-def delete_note(note_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def delete_note(note_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Note).where(Note.id == note_id, Note.user_id == user_id)
     note = db.execute(stmt).scalar_one_or_none()

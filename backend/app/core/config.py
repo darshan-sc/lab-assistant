@@ -10,6 +10,15 @@ class Settings(BaseSettings):
     STORAGE_DIR: str
     MAX_UPLOAD_MB: int
 
+    # Supabase Auth
+    SUPABASE_URL: str = ""
+    SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_JWT_ALGORITHM: str = "HS256"
+    SUPABASE_JWT_PUBLIC_KEY: str = ""
+    
+    # CORS
+    CORS_ORIGINS: str = ""
+
     # OpenAI
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"

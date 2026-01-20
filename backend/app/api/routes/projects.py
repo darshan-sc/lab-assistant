@@ -3,17 +3,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.db import get_db
+from app.deps import get_db, get_current_user
 from app.models import Project
+from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
 from app.services.rag import answer_project_question
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-
-
-# TEMP: until auth exists
-def get_current_user_id() -> int:
-    return 1
 
 
 def get_or_create_default_project(db: Session, user_id: int) -> Project:
@@ -31,8 +27,8 @@ def get_or_create_default_project(db: Session, user_id: int) -> Project:
 
 
 @router.post("", response_model=ProjectOut)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def create_project(payload: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     project = Project(
         user_id=user_id,
@@ -56,8 +52,9 @@ def list_projects(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = (
         select(Project)
@@ -70,8 +67,8 @@ def list_projects(
 
 
 @router.get("/{project_id}", response_model=ProjectOut)
-def get_project(project_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def get_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
     project = db.execute(stmt).scalar_one_or_none()
@@ -81,8 +78,8 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
-def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
     project = db.execute(stmt).scalar_one_or_none()
@@ -105,8 +102,8 @@ def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depend
 
 
 @router.delete("/{project_id}")
-def delete_project(project_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
     project = db.execute(stmt).scalar_one_or_none()
@@ -127,9 +124,10 @@ def qa_project_endpoint(
     question: str = Query(..., min_length=1),
     paper_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Ask a question across all indexed content in a project."""
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
     project = db.execute(stmt).scalar_one_or_none()
