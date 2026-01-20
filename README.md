@@ -37,7 +37,7 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
 - **ORM**: SQLAlchemy
 - **Migrations**: Alembic
 - **AI/LLM**: OpenAI API
-- **Frontend**: React (in development)
+- **Frontend**: React, TailwindCSS, Vite
 
 ## Getting Started
 
@@ -75,10 +75,17 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
     
     *Example `.env`:*
     ```env
-    DATABASE_URL=postgresql://ai_lab_user:ai_lab_password@localhost:5432/ai_lab
+    # Database Credentials
+    POSTGRES_USER=ai_lab_user
+    POSTGRES_PASSWORD=ai_lab_password
+    POSTGRES_DB=ai_lab
+
+    # Consumed by the backend
+    DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+    
     OPENAI_API_KEY=your_openai_api_key_here
     ```
-    *(Note: Database credentials match those in `docker-compose.yml`)*
+    *(Note: Docker Compose will automatically pick up `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` from this file to configure the database container.)*
 
 6.  **Run Database Migrations**
     Apply the database schema:
@@ -93,6 +100,32 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
     The API will be available at `http://localhost:8000`.
     You can view the interactive API documentation at `http://localhost:8000/docs`.
 
-## License
+### Frontend Setup
 
-[MIT](LICENSE)
+1.  **Navigate to the Frontend Directory**
+    ```bash
+    cd frontend
+    ```
+
+2.  **Install Dependencies**
+    ```bash
+    npm install
+    ```
+
+3.  **Environment Configuration**
+    Create a `.env.local` file in the `frontend` directory with the following variables:
+    
+    ```env
+    VITE_API_BASE=http://localhost:8000
+    # Add Supabase credentials if required for authentication/features:
+    # VITE_SUPABASE_URL=your_supabase_url
+    # VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
+
+4.  **Start the Development Server**
+    ```bash
+    npm run dev
+    ```
+    The application will be available at `http://localhost:5173`.
+
+
