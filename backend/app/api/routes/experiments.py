@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.db import get_db
+from app.deps import get_db, get_current_user
 from app.models import Project, Experiment, ExperimentRun
+from app.models.user import User
 from app.schemas.experiment import (
     ExperimentCreate, ExperimentUpdate, ExperimentOut,
     RunCreate, RunUpdate, RunOut,
@@ -13,11 +14,6 @@ from app.api.routes.projects import get_or_create_default_project
 router = APIRouter(tags=["experiments"])
 
 
-# TEMP: until auth exists
-def get_current_user_id() -> int:
-    return 1
-
-
 # --- Experiment Groups ---
 
 @router.post("/projects/{project_id}/experiments", response_model=ExperimentOut)
@@ -25,8 +21,9 @@ def create_experiment(
     project_id: int,
     payload: ExperimentCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     # Verify project
     stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
@@ -54,8 +51,9 @@ def list_experiments(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = (
         select(Experiment)
@@ -68,8 +66,8 @@ def list_experiments(
 
 
 @router.get("/experiments/{experiment_id}", response_model=ExperimentOut)
-def get_experiment(experiment_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def get_experiment(experiment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
     experiment = db.execute(stmt).scalar_one_or_none()
@@ -83,8 +81,9 @@ def update_experiment(
     experiment_id: int,
     payload: ExperimentUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
     experiment = db.execute(stmt).scalar_one_or_none()
@@ -110,8 +109,8 @@ def update_experiment(
 
 
 @router.delete("/experiments/{experiment_id}")
-def delete_experiment(experiment_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def delete_experiment(experiment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
     experiment = db.execute(stmt).scalar_one_or_none()
@@ -130,8 +129,9 @@ def create_run(
     experiment_id: int,
     payload: RunCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     # Verify experiment
     stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
@@ -158,8 +158,9 @@ def list_runs(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = (
         select(ExperimentRun)
@@ -172,8 +173,8 @@ def list_runs(
 
 
 @router.get("/runs/{run_id}", response_model=RunOut)
-def get_run(run_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def get_run(run_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(ExperimentRun).where(ExperimentRun.id == run_id, ExperimentRun.user_id == user_id)
     run = db.execute(stmt).scalar_one_or_none()
@@ -183,8 +184,8 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/runs/{run_id}", response_model=RunOut)
-def update_run(run_id: int, payload: RunUpdate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def update_run(run_id: int, payload: RunUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(ExperimentRun).where(ExperimentRun.id == run_id, ExperimentRun.user_id == user_id)
     run = db.execute(stmt).scalar_one_or_none()
@@ -210,8 +211,8 @@ def update_run(run_id: int, payload: RunUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/runs/{run_id}")
-def delete_run(run_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def delete_run(run_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(ExperimentRun).where(ExperimentRun.id == run_id, ExperimentRun.user_id == user_id)
     run = db.execute(stmt).scalar_one_or_none()

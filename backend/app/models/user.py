@@ -6,6 +6,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    supabase_uid: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
 
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")

@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.db import get_db
+from app.deps import get_db, get_current_user
 from app.models import Paper
+from app.models.user import User
 from app.models.paper import ProcessingStatus
 from app.schemas.paper import PaperUpdate, PaperOut
 from app.services.storage import save_upload_pdf
@@ -15,17 +16,14 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
-# TEMP: until auth exists
-def get_current_user_id() -> int:
-    return 1
-
 @router.post("/upload", response_model=PaperOut)
 async def upload_paper(
     file: UploadFile = File(...),
     project_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     # Default to "Default" project if not specified
     if project_id is None:
@@ -81,8 +79,9 @@ def list_papers(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = select(Paper).where(Paper.user_id == user_id)
 
@@ -93,8 +92,8 @@ def list_papers(
     return list(db.execute(stmt).scalars().all())
 
 @router.get("/{paper_id}", response_model=PaperOut)
-def get_paper(paper_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def get_paper(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
     paper = db.execute(stmt).scalar_one_or_none()
@@ -104,8 +103,8 @@ def get_paper(paper_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{paper_id}", response_model=PaperOut)
-def update_paper(paper_id: int, payload: PaperUpdate, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def update_paper(paper_id: int, payload: PaperUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
     paper = db.execute(stmt).scalar_one_or_none()
@@ -122,8 +121,8 @@ def update_paper(paper_id: int, payload: PaperUpdate, db: Session = Depends(get_
     return paper
 
 @router.delete("/{paper_id}")
-def delete_paper(paper_id: int, db: Session = Depends(get_db)):
-    user_id = get_current_user_id()
+def delete_paper(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user_id = current_user.id
 
     stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
     paper = db.execute(stmt).scalar_one_or_none()
@@ -136,9 +135,9 @@ def delete_paper(paper_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{paper_id}/index")
-def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db)):
+def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Index a paper's text into chunks with embeddings for RAG."""
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
     paper = db.execute(stmt).scalar_one_or_none()
@@ -160,9 +159,10 @@ def qa_paper_endpoint(
     paper_id: int,
     question: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Ask a question about a paper using RAG."""
-    user_id = get_current_user_id()
+    user_id = current_user.id
 
     stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
     paper = db.execute(stmt).scalar_one_or_none()
