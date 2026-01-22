@@ -20,7 +20,9 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         text_parts.append(page.get_text())
 
     doc.close()
-    return "\n".join(text_parts)
+    full_text = "\n".join(text_parts)
+    # Remove NUL characters that PostgreSQL doesn't allow in text fields
+    return full_text.replace('\x00', '')
 
 
 def get_first_n_chars(text: str, n: int = 8000) -> str:
