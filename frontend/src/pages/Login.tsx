@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { TestTube, FlaskConical, Atom } from 'lucide-react';
+import { TestTube, FlaskConical, Atom, Info } from 'lucide-react';
 
 export default function Login() {
   const { signInWithEmail, signUpWithEmail, isAuthenticated, isLoading } = useAuth();
@@ -64,7 +64,7 @@ export default function Login() {
             <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
               <FlaskConical className="w-8 h-8 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-wider uppercase opacity-90">Lab Assistant</span>
+            <span className="text-xl font-bold tracking-wider uppercase opacity-90">ResearchNexus</span>
           </div>
           <h1 className="text-5xl font-bold mb-6 leading-tight">
             Accelerate Your <br/> Research Workflow
@@ -88,6 +88,15 @@ export default function Login() {
                 : 'Join your team and start managing experiments'}
             </p>
           </div>
+          
+          {!isLogin && (
+            <div className="mb-6 p-4 bg-blue-50 text-blue-700 text-sm rounded-lg border border-blue-100 flex items-start gap-2">
+              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <span>
+                <strong>Note:</strong> You will receive a confirmation email from <strong>Supabase</strong> to verify your account.
+              </span>
+            </div>
+          )}
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100 flex items-start gap-2">
@@ -147,7 +156,7 @@ export default function Login() {
               {isLogin ? "Don't have an account? " : "Already have an account? "}
               <button
                 onClick={() => setIsLogin(!isLogin)}
-                className="font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                className="font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
               >
                 {isLogin ? 'Create Account' : 'Sign In'}
               </button>
