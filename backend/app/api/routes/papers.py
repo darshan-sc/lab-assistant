@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.deps import get_db, get_current_user
 from app.models import Paper
 from app.models.user import User
 from app.models.paper import ProcessingStatus
+from app.models.chunk import Chunk
 from app.schemas.paper import PaperUpdate, PaperOut
 from app.services.storage import save_upload_pdf
 from app.services.pdf_extractor import extract_text_from_pdf, get_first_n_chars
@@ -15,6 +16,14 @@ from app.api.routes.projects import get_or_create_default_project
 from app.core.config import settings
 
 router = APIRouter(prefix="/papers", tags=["papers"])
+
+
+def compute_is_indexed(db: Session, paper_id: int) -> bool:
+    """Check if a paper has any chunks indexed for RAG."""
+    count = db.execute(
+        select(func.count()).select_from(Chunk).where(Chunk.paper_id == paper_id)
+    ).scalar()
+    return count > 0
 
 @router.post("/upload", response_model=PaperOut)
 async def upload_paper(
@@ -89,7 +98,24 @@ def list_papers(
         stmt = stmt.where(Paper.project_id == project_id)
 
     stmt = stmt.order_by(Paper.id.desc()).limit(limit).offset(offset)
-    return list(db.execute(stmt).scalars().all())
+    papers = list(db.execute(stmt).scalars().all())
+
+    # Add is_indexed_for_rag to each paper
+    result = []
+    for paper in papers:
+        paper_dict = {
+            "id": paper.id,
+            "user_id": paper.user_id,
+            "project_id": paper.project_id,
+            "title": paper.title,
+            "abstract": paper.abstract,
+            "pdf_path": paper.pdf_path,
+            "processing_status": paper.processing_status,
+            "processing_error": paper.processing_error,
+            "is_indexed_for_rag": compute_is_indexed(db, paper.id),
+        }
+        result.append(paper_dict)
+    return result
 
 @router.get("/{paper_id}", response_model=PaperOut)
 def get_paper(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -99,7 +125,18 @@ def get_paper(paper_id: int, db: Session = Depends(get_db), current_user: User =
     paper = db.execute(stmt).scalar_one_or_none()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    return paper
+
+    return {
+        "id": paper.id,
+        "user_id": paper.user_id,
+        "project_id": paper.project_id,
+        "title": paper.title,
+        "abstract": paper.abstract,
+        "pdf_path": paper.pdf_path,
+        "processing_status": paper.processing_status,
+        "processing_error": paper.processing_error,
+        "is_indexed_for_rag": compute_is_indexed(db, paper.id),
+    }
 
 
 @router.patch("/{paper_id}", response_model=PaperOut)

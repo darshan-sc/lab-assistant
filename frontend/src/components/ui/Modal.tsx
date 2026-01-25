@@ -6,7 +6,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
 export default function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
@@ -33,8 +33,9 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
   const sizeClasses = {
     sm: 'max-w-sm',
     md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-2xl',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+    full: 'max-w-4xl max-h-[85vh]',
   };
 
   return (
@@ -44,7 +45,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
       onClick={(e) => e.target === overlayRef.current && onClose()}
     >
       <div
-        className={`w-full ${sizeClasses[size]} bg-white rounded-2xl shadow-xl transform transition-all`}
+        className={`w-full ${sizeClasses[size]} bg-white rounded-2xl shadow-xl transform transition-all flex flex-col`}
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gray-900">{title}</h2>
@@ -55,7 +56,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' }:
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-6 flex-1 overflow-auto">{children}</div>
       </div>
     </div>
   );

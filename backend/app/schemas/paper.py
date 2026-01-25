@@ -15,6 +15,7 @@ class PaperOut(BaseModel):
     pdf_path: str | None = None
     processing_status: str | None = None
     processing_error: str | None = None
+    is_indexed_for_rag: bool = False
 
     class Config:
         from_attributes = True

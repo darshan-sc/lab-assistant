@@ -64,11 +64,11 @@ export default function Settings() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">About</h2>
-                <p className="text-gray-500">Lab Assistant v1.0</p>
+                <p className="text-gray-500">ResearchNexus v1.0</p>
               </div>
             </div>
             <p className="text-gray-600 text-sm">
-              Lab Assistant is a research management platform that helps you organize experiments,
+              ResearchNexus is a research management platform that helps you organize experiments,
               track literature, and collaborate with your team. Upload papers, ask questions using
               AI-powered RAG, and log your experimental runs all in one place.
             </p>

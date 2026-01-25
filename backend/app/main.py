@@ -9,7 +9,7 @@ from app.api.routes.papers import router as papers_router
 from app.api.routes.notes import router as notes_router
 from app.api.routes.experiments import router as experiments_router
 
-app = FastAPI(title="Lab Assistant API")
+app = FastAPI(title="ResearchNexus API")
 
 # Set all CORS enabled origins
 if settings.CORS_ORIGINS:
@@ -33,7 +33,7 @@ app.include_router(experiments_router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Lab Assistant API"}
+    return {"message": "Welcome to ResearchNexus API"}
 
 @app.get("/db-ping")
 def db_ping(db: Session = Depends(get_db)):
