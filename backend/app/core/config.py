@@ -5,7 +5,7 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 ENV_FILE = ROOT_DIR / ".env"
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Lab Assistant"
+    PROJECT_NAME: str = "ResearchNexus"
     DATABASE_URL: str
     STORAGE_DIR: str
     MAX_UPLOAD_MB: int

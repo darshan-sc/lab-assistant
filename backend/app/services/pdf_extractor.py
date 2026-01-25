@@ -1,6 +1,39 @@
 import fitz  # PyMuPDF
 
 
+def extract_pages_from_pdf(pdf_path: str) -> list[dict]:
+    """Extract text with page numbers from a PDF file.
+
+    Args:
+        pdf_path: Path to the PDF file
+
+    Returns:
+        List of dicts with {"page": int (1-indexed), "text": str, "char_start": int}
+        where char_start is the character offset where this page starts in the full text
+
+    Raises:
+        Exception: If PDF cannot be opened or read
+    """
+    doc = fitz.open(pdf_path)
+    pages = []
+    char_offset = 0
+
+    for page_num, page in enumerate(doc, start=1):
+        text = page.get_text()
+        # Remove NUL characters that PostgreSQL doesn't allow
+        text = text.replace('\x00', '')
+        pages.append({
+            "page": page_num,
+            "text": text,
+            "char_start": char_offset,
+        })
+        # Add 1 for the newline that joins pages
+        char_offset += len(text) + 1
+
+    doc.close()
+    return pages
+
+
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extract all text content from a PDF file.
 

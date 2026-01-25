@@ -44,7 +44,7 @@ export default function Login() {
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="flex flex-col items-center gap-4">
           <FlaskConical className="w-12 h-12 text-blue-600 animate-bounce" />
-          <p className="text-gray-500 font-medium">Initializing Lab Assistant...</p>
+          <p className="text-gray-500 font-medium">Initializing ResearchNexus...</p>
         </div>
       </div>
     );
@@ -64,7 +64,7 @@ export default function Login() {
             <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
               <FlaskConical className="w-8 h-8 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-wider uppercase opacity-90">Lab Assistant</span>
+            <span className="text-xl font-bold tracking-wider uppercase opacity-90">ResearchNexus</span>
           </div>
           <h1 className="text-5xl font-bold mb-6 leading-tight">
             Accelerate Your <br/> Research Workflow

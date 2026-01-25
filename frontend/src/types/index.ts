@@ -28,6 +28,7 @@ export interface Paper {
   pdf_path: string | null;
   processing_status: 'pending' | 'processing' | 'completed' | 'failed';
   processing_error: string | null;
+  is_indexed_for_rag?: boolean;
 }
 
 export interface PaperUpdate {

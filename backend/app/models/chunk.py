@@ -31,6 +31,18 @@ class Chunk(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)  # Position in source
 
+    # Page tracking
+    page_start: Mapped[int | None] = mapped_column(Integer)  # First page of chunk
+    page_end: Mapped[int | None] = mapped_column(Integer)  # Last page of chunk
+
+    # Section/structure tracking
+    section_title: Mapped[str | None] = mapped_column(String(200))  # e.g., "Methods", "Results"
+
+    # Document metadata (denormalized for fast retrieval)
+    doc_title: Mapped[str | None] = mapped_column(String(500))  # Paper title
+    doc_authors: Mapped[str | None] = mapped_column(Text)  # Authors (comma-separated)
+    doc_year: Mapped[int | None] = mapped_column(Integer)  # Publication year
+
     # Vector embedding (OpenAI text-embedding-3-small = 1536 dimensions)
     embedding = mapped_column(Vector(1536))
 

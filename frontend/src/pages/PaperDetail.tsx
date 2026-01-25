@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { papersApi } from '../lib/api-service';
 import type { Paper } from '../types';
-import { Button, Badge, EmptyState, Card, CardContent, Input } from '../components/ui';
+import { Button, Badge, EmptyState, Card, CardContent } from '../components/ui';
 import Notes from '../components/Notes';
 
 interface Message {
@@ -30,7 +30,6 @@ export default function PaperDetail() {
   const [paper, setPaper] = useState<Paper | null>(null);
   const [loading, setLoading] = useState(true);
   const [indexing, setIndexing] = useState(false);
-  const [isIndexedForRAG, setIsIndexedForRAG] = useState(false);
 
   // Q&A state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -63,8 +62,7 @@ export default function PaperDetail() {
     setIndexing(true);
     try {
       await papersApi.index(paperId);
-      setIsIndexedForRAG(true);
-      fetchPaper();
+      await fetchPaper();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to index paper');
     } finally {
@@ -179,7 +177,7 @@ export default function PaperDetail() {
               )}
               <div className="flex items-center gap-3 mt-4">
                 {getStatusBadge(paper.processing_status)}
-                {isIndexedForRAG && (
+                {paper?.is_indexed_for_rag && (
                   <Badge variant="info">
                     <CheckCircle className="w-3 h-3 mr-1" />
                     RAG Indexed
@@ -190,7 +188,7 @@ export default function PaperDetail() {
                 )}
               </div>
             </div>
-            {canBeIndexed && !isIndexedForRAG && (
+            {canBeIndexed && !paper?.is_indexed_for_rag && (
               <Button
                 icon={<RefreshCw className={`w-4 h-4 ${indexing ? 'animate-spin' : ''}`} />}
                 onClick={handleIndex}
@@ -205,22 +203,22 @@ export default function PaperDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Q&A Section */}
           <Card className="flex flex-col h-[600px]">
-            <div className="p-4 border-b border-gray-100">
+            <div className="p-5 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Ask Questions</h2>
               <p className="text-sm text-gray-500 mt-1">
-                {isIndexedForRAG
+                {paper?.is_indexed_for_rag
                   ? 'Ask questions about this paper and get AI-powered answers.'
                   : 'Click "Index for Q&A" first to enable questions.'}
               </p>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-400">
-                  <Bot className="w-12 h-12 mb-3" />
-                  <p className="text-sm">
-                    {isIndexedForRAG
+                  <Bot className="w-12 h-12 mb-3 opacity-50" />
+                  <p className="text-sm max-w-[200px]">
+                    {paper?.is_indexed_for_rag
                       ? 'Start a conversation by asking a question about this paper.'
                       : 'Index the paper for Q&A to start asking questions.'}
                   </p>
@@ -239,13 +237,13 @@ export default function PaperDetail() {
                       </div>
                     )}
                     <div
-                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                         message.role === 'user'
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-900'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
                     </div>
                     {message.role === 'user' && (
                       <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
@@ -260,7 +258,7 @@ export default function PaperDetail() {
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                     <Bot className="w-4 h-4 text-blue-600" />
                   </div>
-                  <div className="bg-gray-100 rounded-lg px-4 py-2">
+                  <div className="bg-gray-100 rounded-2xl px-4 py-3">
                     <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
                   </div>
                 </div>
@@ -269,21 +267,22 @@ export default function PaperDetail() {
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-gray-100">
-              <div className="flex gap-2">
-                <Input
+            <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+              <div className="flex gap-3">
+                <input
+                  type="text"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder={
-                    isIndexedForRAG ? 'Ask a question...' : 'Index paper to enable Q&A'
+                    paper?.is_indexed_for_rag ? 'Ask a question...' : 'Index paper to enable Q&A'
                   }
-                  disabled={!isIndexedForRAG || asking}
+                  disabled={!paper?.is_indexed_for_rag || asking}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskQuestion()}
-                  className="flex-1"
+                  className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
                 <Button
                   onClick={handleAskQuestion}
-                  disabled={!isIndexedForRAG || asking || !question.trim()}
+                  disabled={!paper?.is_indexed_for_rag || asking || !question.trim()}
                 >
                   <Send className="w-4 h-4" />
                 </Button>

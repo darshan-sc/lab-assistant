@@ -519,31 +519,45 @@ export default function ProjectDetail() {
           setAnswer('');
         }}
         title="Ask About This Project"
-        size="lg"
+        size="full"
       >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-500">
+        <div className="flex flex-col h-[60vh]">
+          <p className="text-sm text-gray-500 mb-4">
             Ask questions about all indexed papers in this project. The AI will search
             through your documents to find relevant answers.
           </p>
-          <div className="flex gap-2">
-            <Input
+
+          {/* Answer area */}
+          <div className="flex-1 overflow-y-auto mb-4 min-h-0">
+            {answer ? (
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
+                <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{answer}</p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-400">
+                <div className="text-center">
+                  <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>Ask a question to search across your project documents</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input area */}
+          <div className="flex gap-3 pt-4 border-t border-gray-100">
+            <input
+              type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="e.g., What are the main findings about neural networks?"
-              className="flex-1"
+              className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none text-gray-900 placeholder-gray-400"
               onKeyDown={(e) => e.key === 'Enter' && handleAskProjectQuestion()}
             />
             <Button onClick={handleAskProjectQuestion} loading={askingQuestion}>
-              <Search className="w-4 h-4" />
+              <Search className="w-4 h-4 mr-2" />
+              Search
             </Button>
           </div>
-          {answer && (
-            <div className="bg-gray-50 rounded-lg p-4 mt-4">
-              <p className="text-sm font-medium text-gray-700 mb-2">Answer:</p>
-              <p className="text-gray-900 whitespace-pre-wrap">{answer}</p>
-            </div>
-          )}
         </div>
       </Modal>
     </div>
