@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
@@ -8,10 +9,10 @@ from app.models.user import User
 from app.models.paper import ProcessingStatus
 from app.models.chunk import Chunk
 from app.schemas.paper import PaperUpdate, PaperOut
-from app.services.storage import save_upload_pdf
-from app.services.pdf_extractor import extract_text_from_pdf, get_first_n_chars
+from app.services.pdf_extractor import extract_pages_from_bytes, get_first_n_chars
 from app.services.llm_extractor import extract_paper_metadata
-from app.services.rag import index_paper, answer_question
+from app.services.rag import index_paper_with_sections, answer_question
+from app.services.embedding import parse_document_sections
 from app.api.routes.projects import get_or_create_default_project
 from app.core.config import settings
 
@@ -42,43 +43,51 @@ async def upload_paper(
     if file.content_type not in {"application/pdf"}:
         raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
 
-    data = await file.read()
+    pdf_bytes = await file.read()
 
     max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
-    if len(data) > max_bytes:
+    if len(pdf_bytes) > max_bytes:
         raise HTTPException(status_code=413, detail=f"File too large (max {settings.MAX_UPLOAD_MB} MB)")
 
-    path = save_upload_pdf(data, file.filename)
-
-    # Extract text from PDF (path is already the full path)
+    # Extract text and pages from PDF bytes (no file storage)
     try:
-        full_text = extract_text_from_pdf(path)
+        pages = await extract_pages_from_bytes(pdf_bytes)
+        full_text = "\n".join(p["text"] for p in pages)
         truncated_text = get_first_n_chars(full_text, 8000)
-        metadata = extract_paper_metadata(truncated_text)
+
+        # Run metadata extraction and section parsing in parallel
+        metadata_task = extract_paper_metadata(truncated_text)
+        sections_task = parse_document_sections(full_text)
+        metadata, sections = await asyncio.gather(metadata_task, sections_task)
 
         paper = Paper(
             user_id=user_id,
             project_id=project_id,
-            pdf_path=path,
             title=metadata.title,
             abstract=metadata.abstract,
             extracted_text=full_text,
             processing_status=ProcessingStatus.COMPLETED.value,
         )
+        db.add(paper)
+        db.commit()
+        db.refresh(paper)
+
+        # Index immediately for RAG (pass pre-parsed sections and pages)
+        await index_paper_with_sections(db, paper, sections=sections, pages=pages)
+
     except Exception as e:
-        # If extraction fails, save with filename as title
+        # If extraction/indexing fails, save with filename as title
         paper = Paper(
             user_id=user_id,
             project_id=project_id,
-            pdf_path=path,
             title=file.filename,
             processing_status=ProcessingStatus.FAILED.value,
             processing_error=str(e),
         )
+        db.add(paper)
+        db.commit()
+        db.refresh(paper)
 
-    db.add(paper)
-    db.commit()
-    db.refresh(paper)
     return paper
 
 
@@ -172,7 +181,7 @@ def delete_paper(paper_id: int, db: Session = Depends(get_db), current_user: Use
 
 
 @router.post("/{paper_id}/index")
-def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Index a paper's text into chunks with embeddings for RAG."""
     user_id = current_user.id
 
@@ -185,14 +194,14 @@ def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db), current_u
         raise HTTPException(status_code=400, detail="Paper has no extracted text to index")
 
     try:
-        num_chunks = index_paper(db, paper)
+        num_chunks = await index_paper(db, paper)
         return {"indexed": True, "paper_id": paper_id, "chunks_created": num_chunks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
 
 @router.post("/{paper_id}/qa")
-def qa_paper_endpoint(
+async def qa_paper_endpoint(
     paper_id: int,
     question: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
@@ -207,7 +216,7 @@ def qa_paper_endpoint(
         raise HTTPException(status_code=404, detail="Paper not found")
 
     try:
-        result = answer_question(db, user_id, paper_id, question)
+        result = await answer_question(db, user_id, paper_id, question)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"QA failed: {str(e)}")

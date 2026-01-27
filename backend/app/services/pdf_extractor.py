@@ -1,20 +1,10 @@
+import asyncio
 import fitz  # PyMuPDF
 
 
-def extract_pages_from_pdf(pdf_path: str) -> list[dict]:
-    """Extract text with page numbers from a PDF file.
-
-    Args:
-        pdf_path: Path to the PDF file
-
-    Returns:
-        List of dicts with {"page": int (1-indexed), "text": str, "char_start": int}
-        where char_start is the character offset where this page starts in the full text
-
-    Raises:
-        Exception: If PDF cannot be opened or read
-    """
-    doc = fitz.open(pdf_path)
+def _extract_pages_from_bytes_sync(pdf_bytes: bytes) -> list[dict]:
+    """Synchronous implementation of PDF page extraction from bytes."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     pages = []
     char_offset = 0
 
@@ -34,19 +24,25 @@ def extract_pages_from_pdf(pdf_path: str) -> list[dict]:
     return pages
 
 
-def extract_text_from_pdf(pdf_path: str) -> str:
-    """Extract all text content from a PDF file.
+async def extract_pages_from_bytes(pdf_bytes: bytes) -> list[dict]:
+    """Extract text with page numbers from PDF bytes.
 
     Args:
-        pdf_path: Path to the PDF file
+        pdf_bytes: PDF file content as bytes
 
     Returns:
-        Full text content of the PDF
+        List of dicts with {"page": int (1-indexed), "text": str, "char_start": int}
+        where char_start is the character offset where this page starts in the full text
 
     Raises:
         Exception: If PDF cannot be opened or read
     """
-    doc = fitz.open(pdf_path)
+    return await asyncio.to_thread(_extract_pages_from_bytes_sync, pdf_bytes)
+
+
+def _extract_text_from_bytes_sync(pdf_bytes: bytes) -> str:
+    """Synchronous implementation of PDF text extraction from bytes."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     text_parts = []
 
     for page in doc:
@@ -56,6 +52,21 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     full_text = "\n".join(text_parts)
     # Remove NUL characters that PostgreSQL doesn't allow in text fields
     return full_text.replace('\x00', '')
+
+
+async def extract_text_from_bytes(pdf_bytes: bytes) -> str:
+    """Extract all text content from PDF bytes.
+
+    Args:
+        pdf_bytes: PDF file content as bytes
+
+    Returns:
+        Full text content of the PDF
+
+    Raises:
+        Exception: If PDF cannot be opened or read
+    """
+    return await asyncio.to_thread(_extract_text_from_bytes_sync, pdf_bytes)
 
 
 def get_first_n_chars(text: str, n: int = 8000) -> str:

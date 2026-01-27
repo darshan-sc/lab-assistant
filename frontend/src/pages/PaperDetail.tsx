@@ -8,7 +8,6 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  RefreshCw,
   Bot,
   User,
 } from 'lucide-react';
@@ -29,7 +28,6 @@ export default function PaperDetail() {
 
   const [paper, setPaper] = useState<Paper | null>(null);
   const [loading, setLoading] = useState(true);
-  const [indexing, setIndexing] = useState(false);
 
   // Q&A state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -57,18 +55,6 @@ export default function PaperDetail() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const handleIndex = async () => {
-    setIndexing(true);
-    try {
-      await papersApi.index(paperId);
-      await fetchPaper();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to index paper');
-    } finally {
-      setIndexing(false);
-    }
-  };
 
   const handleAskQuestion = async () => {
     if (!question.trim()) return;
@@ -148,8 +134,6 @@ export default function PaperDetail() {
     );
   }
 
-  const canBeIndexed = paper.processing_status === 'completed';
-
   return (
     <div className="p-6 md:p-10 flex flex-col items-center">
       <div className="w-full max-w-5xl">
@@ -177,26 +161,11 @@ export default function PaperDetail() {
               )}
               <div className="flex items-center gap-3 mt-4">
                 {getStatusBadge(paper.processing_status)}
-                {paper?.is_indexed_for_rag && (
-                  <Badge variant="info">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    RAG Indexed
-                  </Badge>
-                )}
                 {paper.processing_status === 'failed' && paper.processing_error && (
                   <span className="text-sm text-red-600">{paper.processing_error}</span>
                 )}
               </div>
             </div>
-            {canBeIndexed && !paper?.is_indexed_for_rag && (
-              <Button
-                icon={<RefreshCw className={`w-4 h-4 ${indexing ? 'animate-spin' : ''}`} />}
-                onClick={handleIndex}
-                loading={indexing}
-              >
-                Index for Q&A
-              </Button>
-            )}
           </div>
         </div>
 
@@ -206,9 +175,9 @@ export default function PaperDetail() {
             <div className="p-5 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Ask Questions</h2>
               <p className="text-sm text-gray-500 mt-1">
-                {paper?.is_indexed_for_rag
+                {paper.processing_status === 'completed'
                   ? 'Ask questions about this paper and get AI-powered answers.'
-                  : 'Click "Index for Q&A" first to enable questions.'}
+                  : 'Paper is still processing. Q&A will be available once complete.'}
               </p>
             </div>
 
@@ -218,9 +187,9 @@ export default function PaperDetail() {
                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-400">
                   <Bot className="w-12 h-12 mb-3 opacity-50" />
                   <p className="text-sm max-w-[200px]">
-                    {paper?.is_indexed_for_rag
+                    {paper.processing_status === 'completed'
                       ? 'Start a conversation by asking a question about this paper.'
-                      : 'Index the paper for Q&A to start asking questions.'}
+                      : 'Waiting for paper processing to complete...'}
                   </p>
                 </div>
               ) : (
@@ -274,15 +243,15 @@ export default function PaperDetail() {
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder={
-                    paper?.is_indexed_for_rag ? 'Ask a question...' : 'Index paper to enable Q&A'
+                    paper.processing_status === 'completed' ? 'Ask a question...' : 'Processing paper...'
                   }
-                  disabled={!paper?.is_indexed_for_rag || asking}
+                  disabled={paper.processing_status !== 'completed' || asking}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskQuestion()}
                   className="flex-1 px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none text-gray-900 placeholder-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
                 <Button
                   onClick={handleAskQuestion}
-                  disabled={!paper?.is_indexed_for_rag || asking || !question.trim()}
+                  disabled={paper.processing_status !== 'completed' || asking || !question.trim()}
                 >
                   <Send className="w-4 h-4" />
                 </Button>
