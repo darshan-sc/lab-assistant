@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
 from app.core.config import settings
@@ -125,10 +126,20 @@ def get_current_user(
 
     if not user:
         # First login - create user
-        user = User(supabase_uid=supabase_uid, email=email or "")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            user = User(supabase_uid=supabase_uid, email=email or "")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except IntegrityError:
+            # Race condition - another request created the user first
+            db.rollback()
+            stmt = select(User).where(User.email == email)
+            user = db.execute(stmt).scalar_one_or_none()
+            if user:
+                user.supabase_uid = supabase_uid
+                db.commit()
+                db.refresh(user)
     elif email and user.email != email:
         # Update email if changed
         user.email = email
