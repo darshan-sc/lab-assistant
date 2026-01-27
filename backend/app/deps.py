@@ -110,9 +110,18 @@ def get_current_user(
             detail="Token missing user ID",
         )
 
-    # Get or create user
+    # Get or create user - check by supabase_uid first, then by email
     stmt = select(User).where(User.supabase_uid == supabase_uid)
     user = db.execute(stmt).scalar_one_or_none()
+
+    if not user and email:
+        # Check if user exists by email (supabase_uid may have changed)
+        stmt = select(User).where(User.email == email)
+        user = db.execute(stmt).scalar_one_or_none()
+        if user:
+            user.supabase_uid = supabase_uid
+            db.commit()
+            db.refresh(user)
 
     if not user:
         # First login - create user
