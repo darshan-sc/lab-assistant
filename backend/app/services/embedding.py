@@ -1,6 +1,6 @@
 import json
 import tiktoken
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.core.config import settings
 
@@ -13,7 +13,7 @@ CHUNK_SIZE_TOKENS = 400  # Target 300-500 tokens per chunk
 CHUNK_OVERLAP_TOKENS = 50  # Token overlap between chunks
 
 
-def get_embeddings(texts: list[str]) -> list[list[float]]:
+async def get_embeddings(texts: list[str]) -> list[list[float]]:
     """Get embeddings for a list of texts using OpenAI.
 
     Args:
@@ -22,9 +22,9 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     Returns:
         List of embedding vectors (1536 dimensions each)
     """
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-    response = client.embeddings.create(
+    response = await client.embeddings.create(
         model=EMBEDDING_MODEL,
         input=texts,
     )
@@ -32,9 +32,10 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
-def get_embedding(text: str) -> list[float]:
+async def get_embedding(text: str) -> list[float]:
     """Get embedding for a single text."""
-    return get_embeddings([text])[0]
+    embeddings = await get_embeddings([text])
+    return embeddings[0]
 
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -83,7 +84,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return [c for c in chunks if c]  # Filter empty chunks
 
 
-def parse_document_sections(text: str) -> list[dict]:
+async def parse_document_sections(text: str) -> list[dict]:
     """Use LLM to identify sections in an academic paper.
 
     Args:
@@ -94,7 +95,7 @@ def parse_document_sections(text: str) -> list[dict]:
         [{"title": "Abstract", "start": 0, "end": 500},
          {"title": "Introduction", "start": 500, "end": 2000}, ...]
     """
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     # Use first ~12000 chars to identify structure (enough for most papers)
     sample_text = text[:12000] if len(text) > 12000 else text
@@ -110,7 +111,7 @@ Return a JSON array with objects containing:
 Only include sections that clearly exist in the document. Be precise about character positions.
 Return ONLY valid JSON array, no other text."""
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},

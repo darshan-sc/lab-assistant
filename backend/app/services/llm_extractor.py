@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.core.config import settings
 
@@ -25,7 +25,7 @@ Output the title and abstract exactly as they appear in the paper (preserving fo
 Do not add any commentary or explanation - just extract the information."""
 
 
-def extract_paper_metadata(text: str) -> PaperMetadata:
+async def extract_paper_metadata(text: str) -> PaperMetadata:
     """Extract title and abstract from paper text using OpenAI.
 
     Args:
@@ -37,9 +37,9 @@ def extract_paper_metadata(text: str) -> PaperMetadata:
     Raises:
         Exception: If OpenAI API call fails
     """
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-    response = client.beta.chat.completions.parse(
+    response = await client.beta.chat.completions.parse(
         model=settings.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},

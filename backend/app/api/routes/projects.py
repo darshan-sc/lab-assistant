@@ -119,7 +119,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
 
 
 @router.post("/{project_id}/qa")
-def qa_project_endpoint(
+async def qa_project_endpoint(
     project_id: int,
     question: str = Query(..., min_length=1),
     paper_id: int | None = Query(default=None),
@@ -135,7 +135,7 @@ def qa_project_endpoint(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        result = answer_project_question(db, user_id, project_id, question, paper_id=paper_id)
+        result = await answer_project_question(db, user_id, project_id, question, paper_id=paper_id)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"QA failed: {str(e)}")

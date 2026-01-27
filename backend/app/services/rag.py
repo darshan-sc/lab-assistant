@@ -2,7 +2,7 @@ import json
 import re
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.core.config import settings
 from app.models import Paper, Chunk, ChunkSource
@@ -13,7 +13,6 @@ from app.services.embedding import (
     chunk_text_by_tokens,
     map_char_to_page,
 )
-from app.services.pdf_extractor import extract_pages_from_pdf
 
 
 # Grounded answer system prompt for auditable citations
@@ -34,7 +33,7 @@ QUOTES USED:
 """
 
 
-def index_paper(db: Session, paper: Paper) -> int:
+async def index_paper(db: Session, paper: Paper, pages: list[dict] | None = None) -> int:
     """Index a paper's content into chunks with embeddings and metadata.
 
     Uses page-aware extraction and structure-aware chunking for better
@@ -42,7 +41,8 @@ def index_paper(db: Session, paper: Paper) -> int:
 
     Args:
         db: Database session
-        paper: Paper to index (must have pdf_path or extracted_text)
+        paper: Paper to index (must have extracted_text)
+        pages: Optional pre-extracted pages with page numbers and char offsets
 
     Returns:
         Number of chunks created
@@ -55,23 +55,13 @@ def index_paper(db: Session, paper: Paper) -> int:
         )
     )
 
-    pages = None
     full_text = paper.extracted_text
-
-    # Try to extract with page tracking if PDF is available
-    if paper.pdf_path:
-        try:
-            pages = extract_pages_from_pdf(paper.pdf_path)
-            full_text = "\n".join(p["text"] for p in pages)
-        except Exception:
-            # Fall back to existing extracted_text
-            pass
 
     if not full_text:
         raise ValueError("Paper has no extracted text to index")
 
     # Parse document structure using LLM
-    sections = parse_document_sections(full_text)
+    sections = await parse_document_sections(full_text)
 
     # Chunk text respecting sections and using token limits
     chunk_data = chunk_text_by_tokens(full_text, sections)
@@ -81,7 +71,7 @@ def index_paper(db: Session, paper: Paper) -> int:
 
     # Get embeddings for all chunks
     contents = [c["content"] for c in chunk_data]
-    embeddings = get_embeddings(contents)
+    embeddings = await get_embeddings(contents)
 
     # Extract document metadata from paper
     doc_title = paper.title
@@ -120,7 +110,82 @@ def index_paper(db: Session, paper: Paper) -> int:
     return len(chunk_data)
 
 
-def llm_rerank(query: str, chunks: list[Chunk], top_k: int = 8) -> list[Chunk]:
+async def index_paper_with_sections(
+    db: Session,
+    paper: Paper,
+    sections: list[dict],
+    pages: list[dict] | None = None
+) -> int:
+    """Index a paper with pre-parsed sections (faster, skips LLM section parsing).
+
+    Args:
+        db: Database session
+        paper: Paper to index (must have extracted_text)
+        sections: Pre-parsed sections from parse_document_sections()
+        pages: Optional pre-extracted pages with page numbers and char offsets
+
+    Returns:
+        Number of chunks created
+    """
+    # Delete existing chunks for this paper
+    db.execute(
+        delete(Chunk).where(
+            Chunk.paper_id == paper.id,
+            Chunk.source_type == ChunkSource.PAPER.value
+        )
+    )
+
+    full_text = paper.extracted_text
+
+    if not full_text:
+        raise ValueError("Paper has no extracted text to index")
+
+    # Chunk text respecting sections and using token limits
+    chunk_data = chunk_text_by_tokens(full_text, sections)
+
+    if not chunk_data:
+        return 0
+
+    # Get embeddings for all chunks
+    contents = [c["content"] for c in chunk_data]
+    embeddings = await get_embeddings(contents)
+
+    # Extract document metadata from paper
+    doc_title = paper.title
+    doc_authors = None
+    doc_year = None
+
+    # Create chunk records with metadata
+    for i, (chunk_info, embedding) in enumerate(zip(chunk_data, embeddings)):
+        page_start = None
+        page_end = None
+        if pages:
+            page_start = map_char_to_page(chunk_info["char_start"], pages)
+            page_end = map_char_to_page(chunk_info["char_end"], pages)
+
+        chunk = Chunk(
+            user_id=paper.user_id,
+            project_id=paper.project_id,
+            source_type=ChunkSource.PAPER.value,
+            source_id=paper.id,
+            paper_id=paper.id,
+            content=chunk_info["content"],
+            chunk_index=i,
+            embedding=embedding,
+            page_start=page_start,
+            page_end=page_end,
+            section_title=chunk_info.get("section_title"),
+            doc_title=doc_title,
+            doc_authors=doc_authors,
+            doc_year=doc_year,
+        )
+        db.add(chunk)
+
+    db.commit()
+    return len(chunk_data)
+
+
+async def llm_rerank(query: str, chunks: list[Chunk], top_k: int = 8) -> list[Chunk]:
     """Rerank chunks using LLM to score relevance.
 
     Args:
@@ -134,7 +199,7 @@ def llm_rerank(query: str, chunks: list[Chunk], top_k: int = 8) -> list[Chunk]:
     if len(chunks) <= top_k:
         return chunks
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     # Build chunk descriptions for ranking
     chunk_texts = []
@@ -156,7 +221,7 @@ Example: [{{"index": 2, "score": 9}}, {{"index": 0, "score": 7}}, ...]
 
 Return ONLY the JSON array, no other text."""
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": "You are a relevance scoring assistant. Return only valid JSON."},
@@ -178,7 +243,7 @@ Return ONLY the JSON array, no other text."""
         return chunks[:top_k]
 
 
-def retrieve_chunks(
+async def retrieve_chunks(
     db: Session,
     user_id: int,
     query: str,
@@ -213,7 +278,7 @@ def retrieve_chunks(
     # Backward compatibility: top_k overrides final_k if provided
     if top_k is not None:
         final_k = top_k
-    query_embedding = get_embedding(query)
+    query_embedding = await get_embedding(query)
 
     # Stage 1: Vector search for candidates
     fetch_k = initial_k if use_reranking else final_k
@@ -236,7 +301,7 @@ def retrieve_chunks(
 
     # Stage 2: LLM reranking
     if use_reranking and len(candidates) > final_k:
-        return llm_rerank(query, candidates, top_k=final_k)
+        return await llm_rerank(query, candidates, top_k=final_k)
 
     return candidates[:final_k]
 
@@ -327,7 +392,7 @@ def _extract_answer_from_response(response_text: str) -> str:
     return response_text.strip()
 
 
-def answer_question(
+async def answer_question(
     db: Session,
     user_id: int,
     paper_id: int,
@@ -346,12 +411,12 @@ def answer_question(
     Returns:
         Dict with answer and enhanced citations including page numbers and snippets
     """
-    # Retrieve relevant chunks with reranking
-    chunks = retrieve_chunks(
+    # Retrieve relevant chunks (no reranking for faster response)
+    chunks = await retrieve_chunks(
         db, user_id, question,
         paper_id=paper_id,
         final_k=top_k,
-        use_reranking=True
+        use_reranking=False
     )
 
     if not chunks:
@@ -379,9 +444,9 @@ def answer_question(
     context = "\n\n".join(context_parts)
 
     # Call LLM with grounded system prompt
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": GROUNDED_SYSTEM_PROMPT},
@@ -410,7 +475,7 @@ def answer_question(
     }
 
 
-def answer_project_question(
+async def answer_project_question(
     db: Session,
     user_id: int,
     project_id: int,
@@ -431,12 +496,12 @@ def answer_project_question(
     Returns:
         Dict with answer and enhanced citations
     """
-    chunks = retrieve_chunks(
+    chunks = await retrieve_chunks(
         db, user_id, question,
         project_id=project_id,
         paper_id=paper_id,
         final_k=top_k,
-        use_reranking=True
+        use_reranking=False
     )
 
     if not chunks:
@@ -465,7 +530,7 @@ def answer_project_question(
 
     context = "\n\n".join(context_parts)
 
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     # Enhanced system prompt for project-wide queries
     project_system_prompt = """You are a research assistant. Answer ONLY using the provided context from multiple documents in this project.
@@ -484,7 +549,7 @@ QUOTES USED:
 [2]: "exact quote from source 2"
 """
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL,
         messages=[
             {"role": "system", "content": project_system_prompt},
