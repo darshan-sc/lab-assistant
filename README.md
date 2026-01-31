@@ -29,7 +29,7 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
     *   The system performs a cosine similarity search in the database to find the text chunks most relevant to your question.
 
 4.  **Answer Generation**:
-    *   The relevant text chunks are fed into an LLM (OpenAI GPT-4/3.5) as "context".
+    *   The relevant text chunks are fed into an LLM (OpenAI gpt-4o-mini) as "context".
     *   The LLM generates an answer based strictly on the provided context, ensuring grounded and accurate responses with citations.
 
 ## Tech Stack
