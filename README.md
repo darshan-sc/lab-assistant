@@ -48,7 +48,33 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
 - Python 3.10+
 - Docker & Docker Compose (for the database)
 
-### Backend Setup
+### Docker Setup (Recommended)
+
+1.  **Clone the repository**
+    ```bash
+    git clone <repository-url>
+    cd lab-assistant
+    ```
+
+2.  **Environment Configuration**
+    Create a `.env` file in the `backend` directory. You can copy the example:
+    ```bash
+    cp backend/.env.example backend/.env
+    ```
+    Ensure your `backend/.env` contains the necessary keys (OpenAI, Database credentials).
+    
+    *Note: The `docker-compose.yml` uses `backend/.env.local` by default if it exists, otherwise it falls back to `.env`.*
+
+3.  **Start the Application**
+    Run the following command to build and start both the backend and database containers:
+    ```bash
+    docker-compose up --build
+    ```
+    
+    The API will be available at `http://localhost:8000`.
+    The Database will be available on port `5432`.
+
+### Manual Backend Setup
 
 1.  **Start the Database**
     The project uses a Dockerized PostgreSQL instance with the `pgvector` extension.
@@ -73,21 +99,24 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
     ```
 
 5.  **Environment Configuration**
-    Create a `.env` file in the `backend` directory (or ensure the root `.env` is accessible) with the following variables.
-    
-    *Example `.env`:*
+    Create a `.env` file in the `backend` directory. You can copy the example:
+    ```bash
+    cp backend/.env.example backend/.env
+    ```
+    **Important**: If running manually (not via Docker), update `DATABASE_URL` to use `localhost` instead of `db`.
+
+    *Example `.env` for Manual Run:*
     ```env
     # Database Credentials
-    POSTGRES_USER=ai_lab_user
-    POSTGRES_PASSWORD=ai_lab_password
+    POSTGRES_USER=ai_lab_username
+    POSTGRES_PASSWORD=ai_lab_password_1
     POSTGRES_DB=ai_lab
 
-    # Consumed by the backend
-    DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+    # Consumed by the backend (Note: @localhost)
+    DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
     
     OPENAI_API_KEY=your_openai_api_key_here
     ```
-    *(Note: Docker Compose will automatically pick up `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` from this file to configure the database container.)*
 
 6.  **Run Database Migrations**
     Apply the database schema:
