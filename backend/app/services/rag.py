@@ -9,7 +9,6 @@ from app.models import Paper, Chunk, ChunkSource
 from app.services.embedding import (
     get_embeddings,
     get_embedding,
-    parse_document_sections,
     chunk_text_by_tokens,
     map_char_to_page,
 )
@@ -31,83 +30,6 @@ QUOTES USED:
 [1]: "exact quote from source 1"
 [2]: "exact quote from source 2"
 """
-
-
-async def index_paper(db: Session, paper: Paper, pages: list[dict] | None = None) -> int:
-    """Index a paper's content into chunks with embeddings and metadata.
-
-    Uses page-aware extraction and structure-aware chunking for better
-    citation support.
-
-    Args:
-        db: Database session
-        paper: Paper to index (must have extracted_text)
-        pages: Optional pre-extracted pages with page numbers and char offsets
-
-    Returns:
-        Number of chunks created
-    """
-    # Delete existing chunks for this paper
-    db.execute(
-        delete(Chunk).where(
-            Chunk.paper_id == paper.id,
-            Chunk.source_type == ChunkSource.PAPER.value
-        )
-    )
-
-    full_text = paper.extracted_text
-
-    if not full_text:
-        raise ValueError("Paper has no extracted text to index")
-
-    # Parse document structure using LLM
-    sections = await parse_document_sections(full_text)
-
-    # Chunk text respecting sections and using token limits
-    chunk_data = chunk_text_by_tokens(full_text, sections)
-
-    if not chunk_data:
-        return 0
-
-    # Get embeddings for all chunks
-    contents = [c["content"] for c in chunk_data]
-    embeddings = await get_embeddings(contents)
-
-    # Extract document metadata from paper
-    doc_title = paper.title
-    doc_authors = None  # Could be added if Paper model has authors field
-    doc_year = None  # Could be added if Paper model has year field
-
-    # Create chunk records with metadata
-    for i, (chunk_info, embedding) in enumerate(zip(chunk_data, embeddings)):
-        # Map character offsets to page numbers
-        page_start = None
-        page_end = None
-        if pages:
-            page_start = map_char_to_page(chunk_info["char_start"], pages)
-            page_end = map_char_to_page(chunk_info["char_end"], pages)
-
-        chunk = Chunk(
-            user_id=paper.user_id,
-            project_id=paper.project_id,
-            source_type=ChunkSource.PAPER.value,
-            source_id=paper.id,
-            paper_id=paper.id,
-            content=chunk_info["content"],
-            chunk_index=i,
-            embedding=embedding,
-            # New RAG quality fields
-            page_start=page_start,
-            page_end=page_end,
-            section_title=chunk_info.get("section_title"),
-            doc_title=doc_title,
-            doc_authors=doc_authors,
-            doc_year=doc_year,
-        )
-        db.add(chunk)
-
-    db.commit()
-    return len(chunk_data)
 
 
 async def index_paper_with_sections(
@@ -253,7 +175,6 @@ async def retrieve_chunks(
     initial_k: int = 40,
     final_k: int = 8,
     use_reranking: bool = True,
-    top_k: int | None = None,  # Deprecated: use final_k instead
 ) -> list[Chunk]:
     """Retrieve the most relevant chunks using two-stage retrieval.
 
@@ -270,14 +191,10 @@ async def retrieve_chunks(
         initial_k: Number of candidates from vector search
         final_k: Number of chunks after reranking
         use_reranking: Whether to apply LLM reranking
-        top_k: Deprecated, use final_k instead
 
     Returns:
         List of most relevant chunks
     """
-    # Backward compatibility: top_k overrides final_k if provided
-    if top_k is not None:
-        final_k = top_k
     query_embedding = await get_embedding(query)
 
     # Stage 1: Vector search for candidates

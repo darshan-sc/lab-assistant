@@ -5,10 +5,6 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-CHUNK_SIZE = 1000  # characters per chunk (legacy)
-CHUNK_OVERLAP = 200  # overlap between chunks (legacy)
-
-# Token-based chunking parameters
 CHUNK_SIZE_TOKENS = 400  # Target 300-500 tokens per chunk
 CHUNK_OVERLAP_TOKENS = 50  # Token overlap between chunks
 
@@ -36,52 +32,6 @@ async def get_embedding(text: str) -> list[float]:
     """Get embedding for a single text."""
     embeddings = await get_embeddings([text])
     return embeddings[0]
-
-
-def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """Split text into overlapping chunks.
-
-    Args:
-        text: The text to chunk
-        chunk_size: Maximum characters per chunk
-        overlap: Number of overlapping characters between chunks
-
-    Returns:
-        List of text chunks
-    """
-    if len(text) <= chunk_size:
-        return [text]
-
-    chunks = []
-    start = 0
-
-    while start < len(text):
-        end = start + chunk_size
-
-        # Try to break at a sentence or paragraph boundary
-        if end < len(text):
-            # Look for paragraph break first
-            para_break = text.rfind('\n\n', start, end)
-            if para_break > start + chunk_size // 2:
-                end = para_break + 2
-            else:
-                # Look for sentence break
-                sentence_break = max(
-                    text.rfind('. ', start, end),
-                    text.rfind('? ', start, end),
-                    text.rfind('! ', start, end),
-                )
-                if sentence_break > start + chunk_size // 2:
-                    end = sentence_break + 2
-
-        chunks.append(text[start:end].strip())
-
-        # Move start position, accounting for overlap
-        start = end - overlap
-        if start >= len(text):
-            break
-
-    return [c for c in chunks if c]  # Filter empty chunks
 
 
 async def parse_document_sections(text: str) -> list[dict]:
@@ -153,22 +103,6 @@ def map_char_to_page(char_offset: int, pages: list[dict]) -> int:
             return page["page"]
     # Default to last page if offset is beyond document
     return pages[-1]["page"] if pages else 1
-
-
-def get_section_for_position(char_pos: int, sections: list[dict]) -> str | None:
-    """Get section title for a character position.
-
-    Args:
-        char_pos: Character position in document
-        sections: List of section dicts from parse_document_sections()
-
-    Returns:
-        Section title or None if not in a section
-    """
-    for section in sections:
-        if section["start"] <= char_pos < section["end"]:
-            return section["title"]
-    return None
 
 
 def chunk_text_by_tokens(
