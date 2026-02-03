@@ -7,7 +7,6 @@ ENV_FILE = BACKEND_DIR / ".env"
 class Settings(BaseSettings):
     PROJECT_NAME: str = "ResearchNexus"
     DATABASE_URL: str
-    STORAGE_DIR: str
     MAX_UPLOAD_MB: int
 
     # Supabase Auth

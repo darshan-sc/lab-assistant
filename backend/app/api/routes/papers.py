@@ -194,7 +194,8 @@ async def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db), cur
         raise HTTPException(status_code=400, detail="Paper has no extracted text to index")
 
     try:
-        num_chunks = await index_paper(db, paper)
+        sections = await parse_document_sections(paper.extracted_text)
+        num_chunks = await index_paper_with_sections(db, paper, sections=sections)
         return {"indexed": True, "paper_id": paper_id, "chunks_created": num_chunks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")

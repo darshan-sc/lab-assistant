@@ -1,7 +1,7 @@
 import enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Text, DateTime, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, ForeignKey, Text, DateTime, func, JSON
+# from sqlalchemy.dialects.postgresql import JSONB
 from .base import Base
 
 
@@ -25,8 +25,8 @@ class ExperimentRun(Base):
     status: Mapped[str] = mapped_column(String(20), default=RunStatus.PLANNED.value)
 
     # Flexible structured data for ML experiments
-    config: Mapped[dict | None] = mapped_column(JSONB)  # model/dataset/hyperparams/seed/commit/command
-    metrics: Mapped[dict | None] = mapped_column(JSONB)  # acc/loss/f1/runtime/etc
+    config: Mapped[dict | None] = mapped_column(JSON)  # model/dataset/hyperparams/seed/commit/command
+    metrics: Mapped[dict | None] = mapped_column(JSON)  # acc/loss/f1/runtime/etc
 
     started_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))

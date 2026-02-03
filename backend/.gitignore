@@ -5,3 +5,6 @@ __pycache__
 /storage/*
 /alembic/__pycache__/*
 .DS_Store
+.coverage
+htmlcov/
+.pytest_cache/
