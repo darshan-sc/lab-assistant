@@ -6,3 +6,4 @@ export { default as ExperimentDetail } from './ExperimentDetail';
 export { default as Papers } from './Papers';
 export { default as Experiments } from './Experiments';
 export { default as Settings } from './Settings';
+export { default as JoinProject } from './JoinProject';

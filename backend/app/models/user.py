@@ -13,3 +13,4 @@ class User(Base):
     papers = relationship("Paper", back_populates="user", cascade="all, delete-orphan")
     experiments = relationship("Experiment", back_populates="user", cascade="all, delete-orphan")
     notes = relationship("Note", back_populates="user", cascade="all, delete-orphan")
+    project_memberships = relationship("ProjectMember", back_populates="user", cascade="all, delete-orphan")

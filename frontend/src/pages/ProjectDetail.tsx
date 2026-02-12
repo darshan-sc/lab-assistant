@@ -13,12 +13,18 @@ import {
   FolderOpen,
   AlertCircle,
   Clock,
+  Users,
+  Link,
+  Copy,
+  Check,
+  X,
+  UserMinus,
 } from 'lucide-react';
 import { projectsApi, papersApi, experimentsApi } from '../lib/api-service';
-import type { Project, Paper, Experiment } from '../types';
+import type { Project, Paper, Experiment, ProjectMember, ProjectInvite } from '../types';
 import { Modal, Button, Input, Textarea, Badge, EmptyState, Card, CardContent } from '../components/ui';
 
-type Tab = 'papers' | 'experiments';
+type Tab = 'papers' | 'experiments' | 'members';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +34,8 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [invites, setInvites] = useState<ProjectInvite[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('papers');
   const [loading, setLoading] = useState(true);
 
@@ -47,7 +55,13 @@ export default function ProjectDetail() {
   const [answer, setAnswer] = useState('');
   const [askingQuestion, setAskingQuestion] = useState(false);
 
+  // Invite state
+  const [generatingInvite, setGeneratingInvite] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
   const [error, setError] = useState('');
+
+  const isOwner = project?.role === 'owner';
 
   const fetchData = async () => {
     if (!projectId) return;
@@ -68,9 +82,38 @@ export default function ProjectDetail() {
     }
   };
 
+  const fetchMembers = async () => {
+    if (!projectId) return;
+    try {
+      const membersData = await projectsApi.listMembers(projectId);
+      setMembers(membersData);
+    } catch (err) {
+      console.error('Failed to fetch members:', err);
+    }
+  };
+
+  const fetchInvites = async () => {
+    if (!projectId || !isOwner) return;
+    try {
+      const invitesData = await projectsApi.listInvites(projectId);
+      setInvites(invitesData);
+    } catch (err) {
+      console.error('Failed to fetch invites:', err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, [projectId]);
+
+  useEffect(() => {
+    if (activeTab === 'members' && project) {
+      fetchMembers();
+      if (isOwner) {
+        fetchInvites();
+      }
+    }
+  }, [activeTab, project]);
 
   const handleUploadPaper = async () => {
     if (!uploadFile) return;
@@ -145,6 +188,45 @@ export default function ProjectDetail() {
     }
   };
 
+  const handleGenerateInvite = async () => {
+    setGeneratingInvite(true);
+    try {
+      await projectsApi.createInvite(projectId);
+      fetchInvites();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to generate invite');
+    } finally {
+      setGeneratingInvite(false);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: number) => {
+    try {
+      await projectsApi.revokeInvite(projectId, inviteId);
+      fetchInvites();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to revoke invite');
+    }
+  };
+
+  const handleRemoveMember = async (userId: number) => {
+    if (!confirm('Are you sure you want to remove this member?')) return;
+    try {
+      await projectsApi.removeMember(projectId, userId);
+      fetchMembers();
+      fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove member');
+    }
+  };
+
+  const copyInviteLink = (code: string) => {
+    const url = `${window.location.origin}/join/${code}`;
+    navigator.clipboard.writeText(url);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'completed':
@@ -201,7 +283,14 @@ export default function ProjectDetail() {
           </button>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+                {project.role && (
+                  <Badge variant={project.role === 'owner' ? 'info' : 'default'}>
+                    {project.role}
+                  </Badge>
+                )}
+              </div>
               {project.description && (
                 <p className="text-gray-500 mt-1">{project.description}</p>
               )}
@@ -242,6 +331,19 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-2">
                 <FlaskConical className="w-4 h-4" />
                 Experiments ({experiments.length})
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('members')}
+              className={`pb-4 px-1 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'members'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Members {project.member_count != null ? `(${project.member_count})` : ''}
               </div>
             </button>
           </nav>
@@ -397,6 +499,116 @@ export default function ProjectDetail() {
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'members' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Team Members</h2>
+              {isOwner && (
+                <Button
+                  icon={<Link className="w-4 h-4" />}
+                  onClick={handleGenerateInvite}
+                  loading={generatingInvite}
+                >
+                  Generate Invite Link
+                </Button>
+              )}
+            </div>
+
+            {/* Active Invites (owner only) */}
+            {isOwner && invites.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Active Invite Links</h3>
+                <div className="space-y-2">
+                  {invites.map((invite) => (
+                    <div
+                      key={invite.id}
+                      className="flex items-center justify-between p-3 bg-blue-50 border border-blue-100 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Link className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <code className="text-sm text-blue-800 truncate">
+                          {window.location.origin}/join/{invite.code}
+                        </code>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <button
+                          onClick={() => copyInviteLink(invite.code)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                          title="Copy link"
+                        >
+                          {copiedCode === invite.code ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleRevokeInvite(invite.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                          title="Revoke invite"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Members List */}
+            {members.length === 0 ? (
+              <Card>
+                <CardContent>
+                  <EmptyState
+                    icon={<Users className="w-8 h-8" />}
+                    title="No members"
+                    description="Generate an invite link to add team members."
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {members.map((member) => (
+                  <Card key={member.id}>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-600">
+                              {member.email.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{member.email}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Badge variant={member.role === 'owner' ? 'info' : 'default'}>
+                                {member.role}
+                              </Badge>
+                              <span className="text-xs text-gray-400">
+                                Joined {new Date(member.added_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {isOwner && member.role !== 'owner' && (
+                          <button
+                            onClick={() => handleRemoveMember(member.user_id)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove member"
+                          >
+                            <UserMinus className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

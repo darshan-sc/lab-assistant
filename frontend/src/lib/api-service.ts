@@ -3,6 +3,8 @@ import type {
   Project,
   ProjectCreate,
   ProjectUpdate,
+  ProjectMember,
+  ProjectInvite,
   Paper,
   PaperUpdate,
   Experiment,
@@ -94,6 +96,36 @@ export const projectsApi = {
   askQuestion: (id: number, question: string) =>
     request<QAResponse>(`/projects/${id}/qa?question=${encodeURIComponent(question)}`, {
       method: 'POST',
+    }),
+
+  // Members
+  listMembers: (projectId: number) =>
+    request<ProjectMember[]>(`/projects/${projectId}/members`),
+
+  removeMember: (projectId: number, userId: number) =>
+    request<void>(`/projects/${projectId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+
+  // Invites
+  createInvite: (projectId: number) =>
+    request<ProjectInvite>(`/projects/${projectId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  listInvites: (projectId: number) =>
+    request<ProjectInvite[]>(`/projects/${projectId}/invites`),
+
+  revokeInvite: (projectId: number, inviteId: number) =>
+    request<void>(`/projects/${projectId}/invites/${inviteId}`, {
+      method: 'DELETE',
+    }),
+
+  joinByCode: (code: string) =>
+    request<{ joined: boolean; project_id: number }>('/projects/join', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
     }),
 };
 

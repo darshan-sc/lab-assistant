@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.deps import get_db, get_current_user
+from app.deps import get_db, get_current_user, get_project_for_user
 from app.models import Project, Experiment, ExperimentRun
 from app.models.user import User
+from app.models.project_member import ProjectMember
 from app.schemas.experiment import (
     ExperimentCreate, ExperimentUpdate, ExperimentOut,
     RunCreate, RunUpdate, RunOut,
@@ -12,6 +13,46 @@ from app.schemas.experiment import (
 from app.api.routes.projects import get_or_create_default_project
 
 router = APIRouter(tags=["experiments"])
+
+
+def _get_experiment_with_access(db: Session, experiment_id: int, user: User) -> Experiment:
+    """Get an experiment and verify the user has access via project membership."""
+    stmt = select(Experiment).where(Experiment.id == experiment_id)
+    experiment = db.execute(stmt).scalar_one_or_none()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    if experiment.user_id == user.id:
+        return experiment
+
+    if experiment.project_id:
+        try:
+            get_project_for_user(experiment.project_id, db, user)
+            return experiment
+        except HTTPException:
+            pass
+
+    raise HTTPException(status_code=404, detail="Experiment not found")
+
+
+def _get_run_with_access(db: Session, run_id: int, user: User) -> ExperimentRun:
+    """Get a run and verify the user has access via experiment's project membership."""
+    stmt = select(ExperimentRun).where(ExperimentRun.id == run_id)
+    run = db.execute(stmt).scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if run.user_id == user.id:
+        return run
+
+    if run.project_id:
+        try:
+            get_project_for_user(run.project_id, db, user)
+            return run
+        except HTTPException:
+            pass
+
+    raise HTTPException(status_code=404, detail="Run not found")
 
 
 # --- Experiment Groups ---
@@ -23,16 +64,11 @@ def create_experiment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    user_id = current_user.id
-
-    # Verify project
-    stmt = select(Project).where(Project.id == project_id, Project.user_id == user_id)
-    project = db.execute(stmt).scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    # Verify project access
+    get_project_for_user(project_id, db, current_user)
 
     experiment = Experiment(
-        user_id=user_id,
+        user_id=current_user.id,
         project_id=project_id,
         title=payload.title,
         goal=payload.goal,
@@ -53,11 +89,12 @@ def list_experiments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    user_id = current_user.id
+    # Verify project access
+    get_project_for_user(project_id, db, current_user)
 
     stmt = (
         select(Experiment)
-        .where(Experiment.project_id == project_id, Experiment.user_id == user_id)
+        .where(Experiment.project_id == project_id)
         .order_by(Experiment.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -67,13 +104,7 @@ def list_experiments(
 
 @router.get("/experiments/{experiment_id}", response_model=ExperimentOut)
 def get_experiment(experiment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
-    experiment = db.execute(stmt).scalar_one_or_none()
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Experiment not found")
-    return experiment
+    return _get_experiment_with_access(db, experiment_id, current_user)
 
 
 @router.patch("/experiments/{experiment_id}", response_model=ExperimentOut)
@@ -83,12 +114,7 @@ def update_experiment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    user_id = current_user.id
-
-    stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
-    experiment = db.execute(stmt).scalar_one_or_none()
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Experiment not found")
+    experiment = _get_experiment_with_access(db, experiment_id, current_user)
 
     if payload.title is not None:
         experiment.title = payload.title
@@ -110,12 +136,7 @@ def update_experiment(
 
 @router.delete("/experiments/{experiment_id}")
 def delete_experiment(experiment_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
-    experiment = db.execute(stmt).scalar_one_or_none()
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Experiment not found")
+    experiment = _get_experiment_with_access(db, experiment_id, current_user)
 
     db.delete(experiment)
     db.commit()
@@ -131,16 +152,10 @@ def create_run(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    user_id = current_user.id
-
-    # Verify experiment
-    stmt = select(Experiment).where(Experiment.id == experiment_id, Experiment.user_id == user_id)
-    experiment = db.execute(stmt).scalar_one_or_none()
-    if not experiment:
-        raise HTTPException(status_code=404, detail="Experiment not found")
+    experiment = _get_experiment_with_access(db, experiment_id, current_user)
 
     run = ExperimentRun(
-        user_id=user_id,
+        user_id=current_user.id,
         project_id=experiment.project_id,
         experiment_id=experiment_id,
         run_name=payload.run_name,
@@ -160,11 +175,11 @@ def list_runs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    user_id = current_user.id
+    experiment = _get_experiment_with_access(db, experiment_id, current_user)
 
     stmt = (
         select(ExperimentRun)
-        .where(ExperimentRun.experiment_id == experiment_id, ExperimentRun.user_id == user_id)
+        .where(ExperimentRun.experiment_id == experiment_id)
         .order_by(ExperimentRun.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -174,23 +189,12 @@ def list_runs(
 
 @router.get("/runs/{run_id}", response_model=RunOut)
 def get_run(run_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(ExperimentRun).where(ExperimentRun.id == run_id, ExperimentRun.user_id == user_id)
-    run = db.execute(stmt).scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return run
+    return _get_run_with_access(db, run_id, current_user)
 
 
 @router.patch("/runs/{run_id}", response_model=RunOut)
 def update_run(run_id: int, payload: RunUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(ExperimentRun).where(ExperimentRun.id == run_id, ExperimentRun.user_id == user_id)
-    run = db.execute(stmt).scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _get_run_with_access(db, run_id, current_user)
 
     if payload.run_name is not None:
         run.run_name = payload.run_name
@@ -212,12 +216,7 @@ def update_run(run_id: int, payload: RunUpdate, db: Session = Depends(get_db), c
 
 @router.delete("/runs/{run_id}")
 def delete_run(run_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(ExperimentRun).where(ExperimentRun.id == run_id, ExperimentRun.user_id == user_id)
-    run = db.execute(stmt).scalar_one_or_none()
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _get_run_with_access(db, run_id, current_user)
 
     db.delete(run)
     db.commit()

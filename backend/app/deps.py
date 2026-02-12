@@ -8,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from app.db import SessionLocal
 from app.core.config import settings
 from app.models.user import User
+from app.models.project import Project
+from app.models.project_member import ProjectMember
 
 import requests
 from jose import jwk
@@ -147,3 +149,43 @@ def get_current_user(
         db.refresh(user)
 
     return user
+
+
+def get_project_for_user(
+    project_id: int, db: Session, current_user: User
+) -> tuple[Project, str]:
+    """
+    Check if the user has access to a project (as owner or member).
+    Returns (project, role) or raises 404.
+    """
+    stmt = select(Project).where(Project.id == project_id)
+    project = db.execute(stmt).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Check if owner
+    if project.user_id == current_user.id:
+        return project, "owner"
+
+    # Check if member
+    member_stmt = select(ProjectMember).where(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id,
+    )
+    member = db.execute(member_stmt).scalar_one_or_none()
+    if member:
+        return project, member.role
+
+    raise HTTPException(status_code=404, detail="Project not found")
+
+
+def require_project_owner(
+    project_id: int, db: Session, current_user: User
+) -> Project:
+    """
+    Verify the user is the project owner. Returns the project or raises 403/404.
+    """
+    project, role = get_project_for_user(project_id, db, current_user)
+    if role != "owner":
+        raise HTTPException(status_code=403, detail="Only the project owner can perform this action")
+    return project

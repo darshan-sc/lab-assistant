@@ -6,3 +6,5 @@ from .experiment import Experiment, ExperimentStatus
 from .experiment_run import ExperimentRun, RunStatus
 from .note import Note
 from .chunk import Chunk, ChunkSource
+from .project_member import ProjectMember
+from .project_invite import ProjectInvite

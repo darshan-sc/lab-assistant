@@ -6,6 +6,8 @@ export interface Project {
   description: string | null;
   created_at: string;
   updated_at: string;
+  role: string | null;
+  member_count: number | null;
 }
 
 export interface ProjectCreate {
@@ -16,6 +18,22 @@ export interface ProjectCreate {
 export interface ProjectUpdate {
   name?: string;
   description?: string;
+}
+
+export interface ProjectMember {
+  id: number;
+  user_id: number;
+  email: string;
+  role: 'owner' | 'member';
+  added_at: string;
+}
+
+export interface ProjectInvite {
+  id: number;
+  code: string;
+  created_at: string;
+  expires_at: string | null;
+  is_active: boolean;
 }
 
 // Paper types
