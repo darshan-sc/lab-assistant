@@ -11,6 +11,7 @@ import {
   Papers,
   Experiments,
   Settings,
+  JoinProject,
 } from './pages';
 
 function App() {
@@ -73,6 +74,14 @@ function App() {
               element={
                 <Layout>
                   <Settings />
+                </Layout>
+              }
+            />
+            <Route
+              path="/join/:code"
+              element={
+                <Layout>
+                  <JoinProject />
                 </Layout>
               }
             />

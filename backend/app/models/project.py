@@ -25,3 +25,5 @@ class Project(Base):
     notes = relationship("Note", back_populates="project")
     experiments = relationship("Experiment", back_populates="project")
     chunks = relationship("Chunk", back_populates="project")
+    members = relationship("ProjectMember", back_populates="project", cascade="all, delete-orphan")
+    invites = relationship("ProjectInvite", back_populates="project", cascade="all, delete-orphan")

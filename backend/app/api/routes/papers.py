@@ -3,9 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
-from app.deps import get_db, get_current_user
-from app.models import Paper
+from app.deps import get_db, get_current_user, get_project_for_user
+from app.models import Paper, Project
 from app.models.user import User
+from app.models.project_member import ProjectMember
 from app.models.paper import ProcessingStatus
 from app.models.chunk import Chunk
 from app.schemas.paper import PaperUpdate, PaperOut
@@ -17,6 +18,38 @@ from app.api.routes.projects import get_or_create_default_project
 from app.core.config import settings
 
 router = APIRouter(prefix="/papers", tags=["papers"])
+
+
+def _get_accessible_project_ids(db: Session, user_id: int) -> list[int]:
+    """Get all project IDs the user has access to (owned or member of)."""
+    stmt = select(Project.id).where(Project.user_id == user_id)
+    owned = [row[0] for row in db.execute(stmt).all()]
+
+    stmt = select(ProjectMember.project_id).where(ProjectMember.user_id == user_id)
+    member_of = [row[0] for row in db.execute(stmt).all()]
+
+    return list(set(owned + member_of))
+
+
+def _get_paper_with_access(db: Session, paper_id: int, user: User) -> Paper:
+    """Get a paper and verify the user has access via project membership."""
+    stmt = select(Paper).where(Paper.id == paper_id)
+    paper = db.execute(stmt).scalar_one_or_none()
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    # Check access: user owns the paper, or has access to the paper's project
+    if paper.user_id == user.id:
+        return paper
+
+    if paper.project_id:
+        try:
+            get_project_for_user(paper.project_id, db, user)
+            return paper
+        except HTTPException:
+            pass
+
+    raise HTTPException(status_code=404, detail="Paper not found")
 
 
 def compute_is_indexed(db: Session, paper_id: int) -> bool:
@@ -39,6 +72,9 @@ async def upload_paper(
     if project_id is None:
         default_project = get_or_create_default_project(db, user_id)
         project_id = default_project.id
+    else:
+        # Verify user has access to the target project
+        get_project_for_user(project_id, db, current_user)
 
     if file.content_type not in {"application/pdf"}:
         raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
@@ -101,10 +137,14 @@ def list_papers(
 ):
     user_id = current_user.id
 
-    stmt = select(Paper).where(Paper.user_id == user_id)
-
     if project_id is not None:
-        stmt = stmt.where(Paper.project_id == project_id)
+        # Verify access to the specific project
+        get_project_for_user(project_id, db, current_user)
+        stmt = select(Paper).where(Paper.project_id == project_id)
+    else:
+        # Return papers from all accessible projects
+        accessible_ids = _get_accessible_project_ids(db, user_id)
+        stmt = select(Paper).where(Paper.project_id.in_(accessible_ids))
 
     stmt = stmt.order_by(Paper.id.desc()).limit(limit).offset(offset)
     papers = list(db.execute(stmt).scalars().all())
@@ -128,12 +168,7 @@ def list_papers(
 
 @router.get("/{paper_id}", response_model=PaperOut)
 def get_paper(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
-    paper = db.execute(stmt).scalar_one_or_none()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
+    paper = _get_paper_with_access(db, paper_id, current_user)
 
     return {
         "id": paper.id,
@@ -150,12 +185,7 @@ def get_paper(paper_id: int, db: Session = Depends(get_db), current_user: User =
 
 @router.patch("/{paper_id}", response_model=PaperOut)
 def update_paper(paper_id: int, payload: PaperUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
-    paper = db.execute(stmt).scalar_one_or_none()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
+    paper = _get_paper_with_access(db, paper_id, current_user)
 
     if payload.title is not None:
         paper.title = payload.title
@@ -168,12 +198,7 @@ def update_paper(paper_id: int, payload: PaperUpdate, db: Session = Depends(get_
 
 @router.delete("/{paper_id}")
 def delete_paper(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    user_id = current_user.id
-
-    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
-    paper = db.execute(stmt).scalar_one_or_none()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
+    paper = _get_paper_with_access(db, paper_id, current_user)
 
     db.delete(paper)
     db.commit()
@@ -183,12 +208,7 @@ def delete_paper(paper_id: int, db: Session = Depends(get_db), current_user: Use
 @router.post("/{paper_id}/index")
 async def index_paper_endpoint(paper_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Index a paper's text into chunks with embeddings for RAG."""
-    user_id = current_user.id
-
-    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
-    paper = db.execute(stmt).scalar_one_or_none()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
+    paper = _get_paper_with_access(db, paper_id, current_user)
 
     if not paper.extracted_text:
         raise HTTPException(status_code=400, detail="Paper has no extracted text to index")
@@ -209,15 +229,10 @@ async def qa_paper_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """Ask a question about a paper using RAG."""
-    user_id = current_user.id
-
-    stmt = select(Paper).where(Paper.id == paper_id, Paper.user_id == user_id)
-    paper = db.execute(stmt).scalar_one_or_none()
-    if not paper:
-        raise HTTPException(status_code=404, detail="Paper not found")
+    paper = _get_paper_with_access(db, paper_id, current_user)
 
     try:
-        result = await answer_question(db, user_id, paper_id, question)
+        result = await answer_question(db, current_user.id, paper_id, question)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"QA failed: {str(e)}")
