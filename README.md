@@ -1,162 +1,254 @@
-# Lab Assistant
+# ResearchNexus
 
-Lab Assistant is an AI-powered research management tool designed to help scientists and researchers organize their projects, papers, notes, and experiments in one centralized platform. It leverages modern AI (OpenAI) and vector search capabilities to enhance productivity and knowledge retrieval.
+ResearchNexus is an AI-powered research management platform for organizing projects, papers, experiments, and team collaboration. It features a RAG pipeline that lets you ask natural-language questions about your uploaded papers and get grounded answers with citations.
 
 I built this because I often found my experiments and runs getting disorganized and hard to track. I think this could be a useful tool for anyone working in a research environment.
 
 ## Features
 
-- **Project Management**: Organize your research into distinct projects.
-- **Paper Repository**: Upload and manage research papers (PDFs).
-- **AI-Powered Analysis**: Extract insights and summaries from papers using OpenAI.
-- **Notes & Experiments**: Keep detailed logs of your thoughts, hypotheses, and experimental runs.
-- **Vector Search**: Semantic search capabilities powered by `pgvector` to find relevant information across your knowledge base.
-
-## RAG & AI Architecture
-
-The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users to "chat" with their research papers.
-
-1.  **Ingestion & Chunking**:
-    *   When a PDF is uploaded, its text is extracted using `PyMuPDF`.
-    *   The text is split into manageable chunks (e.g., paragraphs or fixed-size windows) to ensure semantic relevance.
-
-2.  **Embedding Generation**:
-    *   Each text chunk is passed to the OpenAI Embeddings API (e.g., `text-embedding-3-small`) to generate a vector representation.
-    *   These vectors are stored in the PostgreSQL database using the `pgvector` extension.
-
-3.  **Semantic Search (Retrieval)**:
-    *   When you ask a question, your query is also embedded into a vector.
-    *   The system performs a cosine similarity search in the database to find the text chunks most relevant to your question.
-
-4.  **Answer Generation**:
-    *   The relevant text chunks are fed into an LLM (OpenAI gpt-4o-mini) as "context".
-    *   The LLM generates an answer based strictly on the provided context, ensuring grounded and accurate responses with citations.
+- **Project Management** — Create projects, invite team members via shareable links, and manage roles (owner/member).
+- **Paper Repository** — Upload PDFs with automatic text extraction, metadata parsing, and section identification via LLM.
+- **AI-Powered Q&A** — Ask questions about individual papers or across an entire project. Answers are grounded in your documents with citations.
+- **Experiment Tracking** — Log experiments with goals, protocols, and results. Track individual runs with JSON config (hyperparameters, seeds) and metrics (accuracy, loss, F1).
+- **Notes** — Attach notes to projects, papers, experiments, or specific runs.
+- **Team Collaboration** — Invite members to projects with invite codes, manage membership, and share research context.
+- **Authentication** — Email/password and Google OAuth via Supabase.
 
 ## Tech Stack
 
-- **Backend**: FastAPI (Python)
-- **Database**: PostgreSQL with `pgvector` extension
-- **ORM**: SQLAlchemy
-- **Migrations**: Alembic
-- **AI/LLM**: OpenAI API
-- **Frontend**: React, TailwindCSS, Vite
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4 |
+| Backend | FastAPI, SQLAlchemy, Alembic |
+| Database | PostgreSQL 16 with pgvector |
+| Auth | Supabase (JWT, Google OAuth with PKCE) |
+| AI | OpenAI gpt-4o-mini (answers + extraction), text-embedding-3-small (embeddings) |
+| PDF Processing | PyMuPDF |
+| Deployment | Vercel (frontend), Docker (backend + database) |
+
+## RAG Pipeline
+
+When a PDF is uploaded, the following pipeline runs:
+
+1. **Text Extraction** — PyMuPDF extracts all text with page offsets.
+2. **LLM Metadata Extraction** — OpenAI extracts title, abstract, and document section boundaries (Abstract, Methods, Results, etc.) from the text.
+3. **Chunking** — Text is split into ~400-token chunks respecting section boundaries, with 50-token overlap between chunks.
+4. **Embedding** — Each chunk is embedded with `text-embedding-3-small` (1536 dimensions) and stored in PostgreSQL via pgvector.
+
+When you ask a question:
+
+1. The question is embedded into a vector.
+2. Cosine similarity search finds the most relevant chunks.
+3. Those chunks are passed as context to gpt-4o-mini with a system prompt that enforces grounded answers with quotes.
+4. The answer and cited sources are returned.
+
+Q&A works at the paper level (`/papers/{id}/qa`) or across an entire project (`/projects/{id}/qa`).
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.10+
-- Docker & Docker Compose (for the database)
+- Node.js 18+
+- Docker & Docker Compose
+- A [Supabase](https://supabase.com) project (for authentication)
+- An [OpenAI API key](https://platform.openai.com)
 
-### Docker Setup (Recommended)
+### 1. Clone the Repository
 
-1.  **Clone the repository**
-    ```bash
-    git clone <repository-url>
-    cd lab-assistant
-    ```
+```bash
+git clone <repository-url>
+cd lab-assistant
+```
 
-2.  **Environment Configuration**
-    Create a `.env` file in the `backend` directory. You can copy the example:
-    ```bash
-    cp backend/.env.example backend/.env
-    ```
-    Ensure your `backend/.env` contains the necessary keys (OpenAI, Database credentials).
-    
-    *Note: The `docker-compose.yml` uses `backend/.env.local` by default if it exists, otherwise it falls back to `.env`.*
+### 2. Backend Setup
 
-3.  **Start the Application**
-    Run the following command to build and start both the backend and database containers:
-    ```bash
-    docker-compose up --build
-    ```
-    
-    The API will be available at `http://localhost:8000`.
-    The Database will be available on port `5432`.
+#### With Docker (recommended)
 
-### Manual Backend Setup
+Create your backend environment file:
 
-1.  **Start the Database**
-    The project uses a Dockerized PostgreSQL instance with the `pgvector` extension.
-    ```bash
-    docker-compose up -d
-    ```
+```bash
+cp backend/.env.example backend/.env
+```
 
-2.  **Navigate to the Backend Directory**
-    ```bash
-    cd backend
-    ```
+Edit `backend/.env` and fill in your credentials:
 
-3.  **Create and Activate a Virtual Environment**
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
-    ```
+```env
+DATABASE_URL=postgresql+psycopg2://ai_lab_username:ai_lab_password_1@db:5432/ai_lab
 
-4.  **Install Dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret
+SUPABASE_JWT_ALGORITHM=ES256
 
-5.  **Environment Configuration**
-    Create a `.env` file in the `backend` directory. You can copy the example:
-    ```bash
-    cp backend/.env.example backend/.env
-    ```
-    **Important**: If running manually (not via Docker), update `DATABASE_URL` to use `localhost` instead of `db`.
+OPENAI_API_KEY=sk-...
 
-    *Example `.env` for Manual Run:*
-    ```env
-    # Database Credentials
-    POSTGRES_USER=ai_lab_username
-    POSTGRES_PASSWORD=ai_lab_password_1
-    POSTGRES_DB=ai_lab
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+```
 
-    # Consumed by the backend (Note: @localhost)
-    DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
-    
-    OPENAI_API_KEY=your_openai_api_key_here
-    ```
+Start the database and backend:
 
-6.  **Run Database Migrations**
-    Apply the database schema:
-    ```bash
-    alembic upgrade head
-    ```
+```bash
+docker-compose up --build
+```
 
-7.  **Start the Backend Server**
-    ```bash
-    uvicorn app.main:app --reload
-    ```
-    The API will be available at `http://localhost:8000`.
-    You can view the interactive API documentation at `http://localhost:8000/docs`.
+The API will be at `http://localhost:8000` and interactive docs at `http://localhost:8000/docs`.
 
-### Frontend Setup
+#### Manual Setup
 
-1.  **Navigate to the Frontend Directory**
-    ```bash
-    cd frontend
-    ```
+Start just the database with Docker:
 
-2.  **Install Dependencies**
-    ```bash
-    npm install
-    ```
+```bash
+docker-compose up -d db
+```
 
-3.  **Environment Configuration**
-    Create a `.env.local` file in the `frontend` directory with the following variables:
-    
-    ```env
-    VITE_API_BASE=http://localhost:8000
-    # Add Supabase credentials if required for authentication/features:
-    # VITE_SUPABASE_URL=your_supabase_url
-    # VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-    ```
+Then set up the backend manually:
 
-4.  **Start the Development Server**
-    ```bash
-    npm run dev
-    ```
-    The application will be available at `http://localhost:5173`.
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+```
 
+Edit `.env` and change the `DATABASE_URL` host from `db` to `localhost`:
 
+```env
+DATABASE_URL=postgresql+psycopg2://ai_lab_username:ai_lab_password_1@localhost:5432/ai_lab
+```
+
+Run migrations and start the server:
+
+```bash
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+### 3. Frontend Setup
+
+```bash
+cd frontend
+npm install
+```
+
+Create `frontend/.env.local`:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_BASE=http://localhost:8000
+```
+
+Start the dev server:
+
+```bash
+npm run dev
+```
+
+The app will be at `http://localhost:5173`.
+
+### 4. Supabase Configuration
+
+In your Supabase project dashboard:
+
+1. Enable **Email/Password** auth under Authentication > Providers.
+2. Enable **Google OAuth** under Authentication > Providers > Google, and add your Google client ID and secret.
+3. Add your app URL (`http://localhost:5173`) to the allowed redirect URLs under Authentication > URL Configuration.
+
+## API Endpoints
+
+### Projects
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/projects` | List projects (owned + member of) |
+| POST | `/projects` | Create project |
+| GET | `/projects/{id}` | Get project |
+| PATCH | `/projects/{id}` | Update project (owner only) |
+| DELETE | `/projects/{id}` | Delete project (owner only) |
+| POST | `/projects/{id}/qa` | Ask question across project |
+
+### Project Members & Invites
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/projects/{id}/members` | List members |
+| DELETE | `/projects/{id}/members/{user_id}` | Remove member |
+| POST | `/projects/{id}/invites` | Generate invite code (owner only) |
+| GET | `/projects/{id}/invites` | List active invites (owner only) |
+| DELETE | `/projects/{id}/invites/{invite_id}` | Revoke invite (owner only) |
+| POST | `/projects/join` | Join project via invite code |
+
+### Papers
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/papers/upload` | Upload PDF |
+| GET | `/papers` | List papers |
+| GET | `/papers/{id}` | Get paper |
+| PATCH | `/papers/{id}` | Update paper |
+| DELETE | `/papers/{id}` | Delete paper |
+| POST | `/papers/{id}/index` | Index paper for RAG |
+| POST | `/papers/{id}/qa` | Ask question about paper |
+
+### Experiments & Runs
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/projects/{project_id}/experiments` | Create experiment |
+| GET | `/projects/{project_id}/experiments` | List experiments in project |
+| GET | `/experiments/{id}` | Get experiment |
+| PATCH | `/experiments/{id}` | Update experiment |
+| DELETE | `/experiments/{id}` | Delete experiment |
+| POST | `/experiments/{experiment_id}/runs` | Create run |
+| GET | `/experiments/{experiment_id}/runs` | List runs |
+| GET | `/runs/{id}` | Get run |
+| PATCH | `/runs/{id}` | Update run |
+| DELETE | `/runs/{id}` | Delete run |
+
+### Notes
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/notes` | Create note |
+| GET | `/notes` | List notes (filterable by project, paper, experiment, run) |
+| PATCH | `/notes/{id}` | Update note |
+| DELETE | `/notes/{id}` | Delete note |
+
+## Project Structure
+
+```
+lab-assistant/
+├── frontend/
+│   ├── src/
+│   │   ├── pages/          # Login, Dashboard, ProjectDetail, Papers,
+│   │   │                   # PaperDetail, Experiments, ExperimentDetail,
+│   │   │                   # Settings, JoinProject
+│   │   ├── components/     # Layout, ProtectedRoute, Notes, ui/
+│   │   ├── context/        # AuthContext (Supabase auth state)
+│   │   ├── lib/            # supabase.ts, api-service.ts
+│   │   └── types/          # TypeScript interfaces
+│   ├── vercel.json         # Vercel SPA rewrite config
+│   └── package.json
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/     # projects, papers, experiments, notes
+│   │   ├── models/         # SQLAlchemy models (User, Project, Paper,
+│   │   │                   # Experiment, ExperimentRun, Note, Chunk,
+│   │   │                   # ProjectMember, ProjectInvite)
+│   │   ├── schemas/        # Pydantic request/response models
+│   │   ├── services/       # rag, embedding, pdf_extractor, llm_extractor
+│   │   ├── core/config.py  # Settings from env vars
+│   │   ├── deps.py         # Auth (JWT verification) & DB session
+│   │   ├── db.py           # SQLAlchemy engine setup
+│   │   └── main.py         # FastAPI app with CORS
+│   ├── alembic/            # Database migrations
+│   ├── tests/              # Pytest test suite
+│   ├── Dockerfile
+│   └── requirements.txt
+└── docker-compose.yml      # PostgreSQL (pgvector) + Backend
+```
+
+## License
+
+See [LICENSE](LICENSE).
