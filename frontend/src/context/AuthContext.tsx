@@ -26,16 +26,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email ?? '',
-        });
+    // Handle OAuth callback - exchange code for session if present in URL
+    const handleOAuthCallback = async () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('code')) {
+        const { error } = await supabase.auth.exchangeCodeForSession(params.get('code')!);
+        if (error) {
+          console.error('Error exchanging code for session:', error);
+        }
       }
-      setIsLoading(false);
+    };
+
+    handleOAuthCallback().then(() => {
+      // Get initial session after potential code exchange
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (session?.user) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email ?? '',
+          });
+        }
+        setIsLoading(false);
+      });
     });
 
     // Listen for auth changes
