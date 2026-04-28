@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FlaskConical,
@@ -16,7 +18,7 @@ import type { Project, Paper, Experiment } from '../types';
 import { Modal, Button, Input, Textarea, EmptyState } from '../components/ui';
 
 export default function Dashboard() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
@@ -112,7 +114,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-500 mt-1 text-sm">
-              Welcome back, here's an overview of your research.
+              Welcome back, here&apos;s an overview of your research.
             </p>
           </div>
           <div
@@ -198,7 +200,7 @@ export default function Dashboard() {
                     <tr
                       key={project.id}
                       className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                      onClick={() => navigate(`/projects/${project.id}`)}
+                      onClick={() => router.push(`/projects/${project.id}`)}
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">

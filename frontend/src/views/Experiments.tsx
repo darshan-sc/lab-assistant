@@ -1,21 +1,23 @@
+'use client';
+
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import {
-  FileText,
+  FlaskConical,
   Loader2,
   Search,
-  AlertCircle,
-  CheckCircle,
   Clock,
   FolderOpen,
+  CheckCircle,
+  Pause,
 } from 'lucide-react';
-import { papersApi, projectsApi } from '../lib/api-service';
-import type { Paper, Project } from '../types';
+import { experimentsApi, projectsApi } from '../lib/api-service';
+import type { Experiment, Project } from '../types';
 import { Badge, EmptyState, Card, CardContent, Input } from '../components/ui';
 
-export default function Papers() {
-  const navigate = useNavigate();
-  const [papers, setPapers] = useState<Paper[]>([]);
+export default function Experiments() {
+  const router = useRouter();
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,14 +25,22 @@ export default function Papers() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [papersData, projectsData] = await Promise.all([
-        papersApi.list(),
-        projectsApi.list(),
-      ]);
-      setPapers(papersData);
+      const projectsData = await projectsApi.list();
       setProjects(projectsData);
+
+      // Fetch experiments for all projects
+      const allExperiments: Experiment[] = [];
+      for (const project of projectsData) {
+        try {
+          const exps = await experimentsApi.list(project.id);
+          allExperiments.push(...exps);
+        } catch {
+          // Ignore errors for individual projects
+        }
+      }
+      setExperiments(allExperiments);
     } catch (err) {
-      console.error('Failed to fetch papers:', err);
+      console.error('Failed to fetch experiments:', err);
     } finally {
       setLoading(false);
     }
@@ -52,36 +62,31 @@ export default function Papers() {
         return (
           <Badge variant="success">
             <CheckCircle className="w-3 h-3 mr-1" />
-            Indexed
+            Completed
           </Badge>
         );
-      case 'processing':
+      case 'active':
         return (
-          <Badge variant="info">
-            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-            Processing
+          <Badge variant="success">
+            <FlaskConical className="w-3 h-3 mr-1" />
+            Active
           </Badge>
         );
-      case 'failed':
+      case 'paused':
         return (
-          <Badge variant="error">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Failed
+          <Badge variant="warning">
+            <Pause className="w-3 h-3 mr-1" />
+            Paused
           </Badge>
         );
       default:
-        return (
-          <Badge variant="default">
-            <Clock className="w-3 h-3 mr-1" />
-            Pending
-          </Badge>
-        );
+        return <Badge variant="default">{status}</Badge>;
     }
   };
 
-  const filteredPapers = papers.filter((paper) =>
-    paper.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    paper.abstract?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredExperiments = experiments.filter((exp) =>
+    exp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    exp.goal?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -97,8 +102,8 @@ export default function Papers() {
       <div className="w-full max-w-5xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Publications</h1>
-          <p className="text-gray-500 mt-1">All your research papers across projects.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Experiments</h1>
+          <p className="text-gray-500 mt-1">All your experiments across projects.</p>
         </div>
 
         {/* Search */}
@@ -108,54 +113,56 @@ export default function Papers() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search papers..."
+              placeholder="Search experiments..."
               className="pl-10"
             />
           </div>
         </div>
 
-        {/* Papers List */}
-        {filteredPapers.length === 0 ? (
+        {/* Experiments List */}
+        {filteredExperiments.length === 0 ? (
           <Card>
             <CardContent>
               <EmptyState
-                icon={<FileText className="w-8 h-8" />}
-                title={searchQuery ? 'No papers found' : 'No papers yet'}
+                icon={<FlaskConical className="w-8 h-8" />}
+                title={searchQuery ? 'No experiments found' : 'No experiments yet'}
                 description={
                   searchQuery
                     ? 'Try adjusting your search query.'
-                    : 'Upload papers to your projects to see them here.'
+                    : 'Create experiments in your projects to see them here.'
                 }
               />
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredPapers.map((paper) => (
+            {filteredExperiments.map((experiment) => (
               <Card
-                key={paper.id}
+                key={experiment.id}
                 hover
-                onClick={() => navigate(`/papers/${paper.id}`)}
+                onClick={() => router.push(`/experiments/${experiment.id}`)}
               >
                 <CardContent>
                   <div className="flex items-start gap-4">
-                    <div className="p-3 bg-indigo-50 rounded-lg flex-shrink-0">
-                      <FileText className="w-5 h-5 text-indigo-600" />
+                    <div className="p-3 bg-purple-50 rounded-lg flex-shrink-0">
+                      <FlaskConical className="w-5 h-5 text-purple-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 truncate">
-                        {paper.title || 'Untitled Paper'}
-                      </h3>
-                      {paper.abstract && (
+                      <h3 className="font-medium text-gray-900">{experiment.title}</h3>
+                      {experiment.goal && (
                         <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                          {paper.abstract}
+                          {experiment.goal}
                         </p>
                       )}
                       <div className="flex items-center gap-3 mt-3">
-                        {getStatusBadge(paper.processing_status)}
+                        {getStatusBadge(experiment.status)}
                         <span className="text-xs text-gray-400 flex items-center gap-1">
                           <FolderOpen className="w-3 h-3" />
-                          {getProjectName(paper.project_id)}
+                          {getProjectName(experiment.project_id)}
+                        </span>
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(experiment.created_at).toLocaleDateString()}
                         </span>
                       </div>
                     </div>

@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   FileText,
@@ -22,8 +24,9 @@ interface Message {
 }
 
 export default function PaperDetail() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
+  const router = useRouter();
   const paperId = parseInt(id || '0');
 
   const [paper, setPaper] = useState<Paper | null>(null);
@@ -128,7 +131,7 @@ export default function PaperDetail() {
           icon={<FileText className="w-8 h-8" />}
           title="Paper not found"
           description="The paper you're looking for doesn't exist."
-          action={<Button onClick={() => navigate(-1)}>Go Back</Button>}
+          action={<Button onClick={() => router.back()}>Go Back</Button>}
         />
       </div>
     );
@@ -140,7 +143,7 @@ export default function PaperDetail() {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => router.back()}
             className="flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

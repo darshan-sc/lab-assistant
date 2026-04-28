@@ -2,3 +2,8 @@
 .DS_Store
 **/.DS_Store
 .env.local
+.next
+dist
+out
+next-env.d.ts
+docs/
