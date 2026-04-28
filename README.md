@@ -39,7 +39,7 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
 - **ORM**: SQLAlchemy
 - **Migrations**: Alembic
 - **AI/LLM**: OpenAI API
-- **Frontend**: React, TailwindCSS, Vite
+- **Frontend**: Next.js, React, Tailwind CSS
 
 ## Getting Started
 
@@ -63,7 +63,7 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
     ```
     Ensure your `backend/.env` contains the necessary keys (OpenAI, Database credentials).
     
-    *Note: The `docker-compose.yml` uses `backend/.env.local` by default if it exists, otherwise it falls back to `.env`.*
+    *Note: `docker-compose.yml` reads `backend/${ENV_FILE:-.env}`. Set `ENV_FILE=.env.local` if you want Compose to use `backend/.env.local`.*
 
 3.  **Start the Application**
     Run the following command to build and start both the backend and database containers:
@@ -147,16 +147,24 @@ The project uses a Retrieval-Augmented Generation (RAG) pipeline to allow users 
     Create a `.env.local` file in the `frontend` directory with the following variables:
     
     ```env
-    VITE_API_BASE=http://localhost:8000
-    # Add Supabase credentials if required for authentication/features:
-    # VITE_SUPABASE_URL=your_supabase_url
-    # VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+    NEXT_PUBLIC_API_BASE=/api
+    API_PROXY_TARGET=http://localhost:8000
+
+    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
     ```
+
+    `NEXT_PUBLIC_API_BASE=/api` sends browser API calls through the Next.js rewrite in `frontend/next.config.ts`. `API_PROXY_TARGET` controls where that rewrite forwards requests.
 
 4.  **Start the Development Server**
     ```bash
     npm run dev
     ```
-    The application will be available at `http://localhost:5173`.
+    The application will be available at `http://localhost:3000`.
 
+5.  **Build or Run Production Locally**
+    ```bash
+    npm run build
+    npm run start
+    ```
 
