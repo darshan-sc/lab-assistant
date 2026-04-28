@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   FileText,
@@ -27,8 +29,9 @@ import { Modal, Button, Input, Textarea, Badge, EmptyState, Card, CardContent } 
 type Tab = 'papers' | 'experiments' | 'members';
 
 export default function ProjectDetail() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
+  const router = useRouter();
   const projectId = parseInt(id || '0');
 
   const [project, setProject] = useState<Project | null>(null);
@@ -58,6 +61,7 @@ export default function ProjectDetail() {
   // Invite state
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [inviteOrigin, setInviteOrigin] = useState('');
 
   const [error, setError] = useState('');
 
@@ -105,6 +109,10 @@ export default function ProjectDetail() {
   useEffect(() => {
     fetchData();
   }, [projectId]);
+
+  useEffect(() => {
+    setInviteOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'members' && project) {
@@ -221,7 +229,7 @@ export default function ProjectDetail() {
   };
 
   const copyInviteLink = (code: string) => {
-    const url = `${window.location.origin}/join/${code}`;
+    const url = `${inviteOrigin || window.location.origin}/join/${code}`;
     navigator.clipboard.writeText(url);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
@@ -262,7 +270,7 @@ export default function ProjectDetail() {
           title="Project not found"
           description="The project you're looking for doesn't exist."
           action={
-            <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
+            <Button onClick={() => router.push('/')}>Back to Dashboard</Button>
           }
         />
       </div>
@@ -275,7 +283,7 @@ export default function ProjectDetail() {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => router.push('/')}
             className="flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -386,7 +394,7 @@ export default function ProjectDetail() {
                   <Card
                     key={paper.id}
                     hover
-                    onClick={() => navigate(`/papers/${paper.id}`)}
+                    onClick={() => router.push(`/papers/${paper.id}`)}
                   >
                     <CardContent>
                       <div className="flex items-start justify-between">
@@ -468,7 +476,7 @@ export default function ProjectDetail() {
                   <Card
                     key={experiment.id}
                     hover
-                    onClick={() => navigate(`/experiments/${experiment.id}`)}
+                    onClick={() => router.push(`/experiments/${experiment.id}`)}
                   >
                     <CardContent>
                       <div className="flex items-start justify-between">
@@ -536,7 +544,7 @@ export default function ProjectDetail() {
                       <div className="flex items-center gap-3 min-w-0">
                         <Link className="w-4 h-4 text-blue-600 flex-shrink-0" />
                         <code className="text-sm text-blue-800 truncate">
-                          {window.location.origin}/join/{invite.code}
+                          {inviteOrigin}/join/{invite.code}
                         </code>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 ml-3">

@@ -1,3 +1,5 @@
+'use client';
+
 import { useAuth } from '../context/AuthContext';
 import { Settings as SettingsIcon, User, Mail, Shield } from 'lucide-react';
 import { Card, CardContent } from '../components/ui';

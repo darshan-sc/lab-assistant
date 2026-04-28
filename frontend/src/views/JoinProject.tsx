@@ -1,20 +1,21 @@
+'use client';
+
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useRouter } from 'next/navigation';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { projectsApi } from '../lib/api-service';
 import { Button } from '../components/ui';
 
 export default function JoinProject() {
-  const { code } = useParams<{ code: string }>();
-  const navigate = useNavigate();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const params = useParams<{ code: string }>();
+  const code = params?.code;
+  const router = useRouter();
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(code ? 'loading' : 'error');
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(code ? '' : 'No invite code provided');
 
   useEffect(() => {
     if (!code) {
-      setStatus('error');
-      setErrorMessage('No invite code provided');
       return;
     }
 
@@ -44,9 +45,9 @@ export default function JoinProject() {
         {status === 'success' && (
           <div>
             <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">You're in!</h2>
-            <p className="text-gray-500 mb-6">You've been added to the project as a member.</p>
-            <Button onClick={() => navigate(projectId ? `/projects/${projectId}` : '/')}>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">You&apos;re in!</h2>
+            <p className="text-gray-500 mb-6">You&apos;ve been added to the project as a member.</p>
+            <Button onClick={() => router.push(projectId ? `/projects/${projectId}` : '/')}>
               Go to Project
             </Button>
           </div>
@@ -57,7 +58,7 @@ export default function JoinProject() {
             <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Could not join</h2>
             <p className="text-gray-500 mb-6">{errorMessage}</p>
-            <Button onClick={() => navigate('/')}>Go to Dashboard</Button>
+            <Button onClick={() => router.push('/')}>Go to Dashboard</Button>
           </div>
         )}
       </div>

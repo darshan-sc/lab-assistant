@@ -1,11 +1,21 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { FlaskConical } from 'lucide-react';
+'use client';
 
-export default function ProtectedRoute() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { FlaskConical } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+
+export default function AuthGate({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="flex flex-col items-center gap-4">
@@ -16,9 +26,5 @@ export default function ProtectedRoute() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <Outlet />;
+  return children;
 }

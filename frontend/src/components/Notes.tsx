@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { StickyNote, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
 import { notesApi } from '../lib/api-service';

@@ -1,4 +1,7 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
@@ -17,13 +20,14 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
       await signOut();
-      navigate('/login');
+      router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -36,23 +40,25 @@ export default function Layout({ children }: LayoutProps) {
     { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 
-  const NavItem = ({ to, icon: Icon, label }: { to: string; icon: typeof LayoutDashboard; label: string }) => (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      onClick={() => setMobileMenuOpen(false)}
-      className={({ isActive }) =>
-        `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors cursor-pointer ${
+  const NavItem = ({ to, icon: Icon, label }: { to: string; icon: typeof LayoutDashboard; label: string }) => {
+    const currentPath = pathname ?? '';
+    const isActive = to === '/' ? currentPath === '/' : currentPath.startsWith(to);
+
+    return (
+      <Link
+        href={to}
+        onClick={() => setMobileMenuOpen(false)}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors cursor-pointer ${
           isActive
             ? 'text-blue-600 bg-blue-50'
             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-        }`
-      }
-    >
-      <Icon className="w-5 h-5" />
-      {label}
-    </NavLink>
-  );
+        }`}
+      >
+        <Icon className="w-5 h-5" />
+        {label}
+      </Link>
+    );
+  };
 
   return (
     <div className="min-h-screen w-full bg-gray-50 flex justify-center">

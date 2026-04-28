@@ -1,11 +1,13 @@
+'use client';
+
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { TestTube, FlaskConical, Atom } from 'lucide-react';
 
 export default function Login() {
   const { signInWithEmail, signUpWithEmail, signInWithGoogle, isAuthenticated, isLoading } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,9 +17,9 @@ export default function Login() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/');
+      router.push('/');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
